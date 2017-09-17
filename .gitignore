@@ -1,5 +1,6 @@
 *.o
 build/*
+*.gcov
 .cproject
 .project
 .settings
