@@ -17,12 +17,12 @@ MKDIR = mkdir -p
 FLAGS ?=
 
 GCOV_ANNOTATION := //@REQUIRED_GCOV:
-	
+
 MONOLITH ?=
 GCOV ?=
 V ?= @
-ADDR-SANI ?= 
-DBG ?= 
+ADDR-SANI ?=
+DBG ?=
 
 BASECFILES := $(wildcard $(srcdir)/*.c)
 TARGET-CALCULATOR = .calculator
@@ -36,7 +36,7 @@ binary := $(binary)-mono
 FLAGS += -DSPFS_MONOLITH=1
 else
 CFILES_FS = $(filter-out $(CFILES_MONOLITH),$(BASECFILES))
-endif  
+endif
 
 ifeq ($(MAKECMDGOALS), $(TARGET-CALCULATOR))
 # calculator
@@ -45,7 +45,7 @@ binary := $(binary)-calc
 else
 # default to the test binary
 CFILES := $(CFILES_FS) $(CFILES_TEST)
-FLAGS += -DSPFS_TEST=1 
+FLAGS += -DSPFS_TEST=1
 binary := $(binary)-test
 endif
 
@@ -145,7 +145,7 @@ test-buildonly: $(builddir)/$(binary)
 clean:
 	$(V)echo "... clean"
 	$(V)rm -rf $(builddir)
-	$(V)rm -f *.gcov	
+	$(V)rm -f *.gcov
 
 info:
 	$(V)echo CFILES
@@ -154,8 +154,7 @@ info:
 	$(V)echo $(CFLAGS)
 	$(V)echo LDFLAGS
 	$(V)echo $(LDFLAGS)
-	
-	
+
 calculator:
 	$(V)$(MAKE) $(TARGET-CALCULATOR) FLAGS="\
 	-DSPFS_CFG_DYNAMIC=1 \
@@ -171,7 +170,7 @@ calculator:
 	-DSPFS_DBG_JOURNAL=0 \
 	-DSPFS_DBG_FS=0 \
 	"
-	
+
 $(TARGET-CALCULATOR): $(builddir)/$(binary)
 
 .mkdirs:
