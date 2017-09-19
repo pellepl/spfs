@@ -139,4 +139,22 @@ int cfs_opendir(cfs_t *fs, cfs_DIR **d, const char *path);
 int cfs_readdir(cfs_t *fs, cfs_DIR **d);
 int cfs_closedir(cfs_t *cfs, cfs_DIR **d);
 
+int cfs_mountc(cfs_t *fs, int *ret);
+int cfs_umountc(cfs_t *fs, int *ret);
+int cfs_creatc(cfs_t *fs, int *ret, const char *path);
+int cfs_openc(cfs_t *fs, int *ret, const char *path, uint32_t oflags);
+int cfs_readc(cfs_t *fs, int *ret, int fh, uint8_t **buf, uint32_t sz);
+int cfs_writec(cfs_t *fs, int *ret, int fh, const void *buf, uint32_t sz);
+int cfs_truncatec(cfs_t *fs, int *ret, const char *path, uint32_t sz);
+int cfs_ftruncatec(cfs_t *fs, int *ret, int fh, uint32_t sz);
+int cfs_closec(cfs_t *fs, int *ret, int fh);
+int cfs_lseekc(cfs_t *fs, int *ret, int fh, int offs, int whence);
+int cfs_ftellc(cfs_t *fs, int *ret, int fh);
+int cfs_statc(cfs_t *fs, int *ret, const char *path, struct cfs_stat **buf);
+int cfs_removec(cfs_t *fs, int *ret, const char *path);
+int cfs_renamec(cfs_t *fs, int *ret, const char *old_path, const char *new_path);
+int cfs_opendirc(cfs_t *fs, int *ret, cfs_DIR **d, const char *path);
+int cfs_readdirc(cfs_t *fs, int *ret, cfs_DIR **d);
+int cfs_closedirc(cfs_t *cfs, int *ret, cfs_DIR **d);
+
 #endif /* _COMBINEDFS_H_ */

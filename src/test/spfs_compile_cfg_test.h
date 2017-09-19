@@ -56,10 +56,6 @@
 
 #define SPFS_DBG_USE_ANSI_COLORS        1
 
-
-#ifndef BITMANIO_H_WHEREABOUTS
 #define BITMANIO_H_WHEREABOUTS          "bitmanio.h"
-#endif
-
 
 #endif /* _SPFS_COMPILE_CFG_TEST_H_ */

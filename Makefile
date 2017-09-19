@@ -110,9 +110,7 @@ endif
 # coverage for fs files only
 $(OBJFSFILES): CFLAGS += $(CFLAGS_GCOV)
 
-.PHONY: all
-
-$(builddir)/$(binary): .mkdirs $(OBJFILES)
+$(builddir)/$(binary): $(OBJFILES)
 	$(V)@echo "... linking $@"
 	$(V)$(CC) $(LDFLAGS) $(LIBS) -o $@ $(OBJFILES)
 
@@ -128,6 +126,8 @@ $(DEPFILES) : $(builddir)/%.d:%.c
 	$(CC) -M $< > $@.$$$$ 2> /dev/null; \
 	sed 's,\($*\)\.o[ :]*, $(builddir)/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
+
+.PHONY: all test clean
 
 # make all binaries
 all:	$(builddir)/$(binary) calculator
@@ -160,6 +160,8 @@ info:
 	$(V)echo $(CFLAGS)
 	$(V)echo LDFLAGS
 	$(V)echo $(LDFLAGS)
+	$(V)echo DEPFILES
+	$(V)echo $(DEPFILES)
 
 calculator:
 	$(V)$(MAKE) $(TARGET-CALCULATOR) FLAGS="\

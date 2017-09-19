@@ -15,6 +15,8 @@
 
 #if SPFS_TEST
 #include "spfs_compile_cfg_test.h"
+#else
+#include "spfs_compile_cfg_local.h"
 #endif
 
 // normally, these types should not be tampered with

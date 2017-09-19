@@ -416,7 +416,7 @@ int main(int argc, char **argv) {
     cfd = cfs_open(&cfs, "duderino", CFS_O_RDWR | CFS_O_CREAT | CFS_O_APPEND);
     cfs_close(&cfs, cfd);
     cfs_validate_file(&cfs,"test");
-    cfs_validate_ls(&cfs);
+    cfs_validate_fs(&cfs);
     cfs_free(&cfs);
 
   }
