@@ -10,6 +10,11 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <dirent.h>
+#include <unistd.h>
 
 #include "spfs.h"
 #include "spfs_lowlevel.h"
@@ -23,6 +28,7 @@
 
 #include "sillyfs.h"
 #include "cfs_sillyfs.h"
+#include "cfs_posix.h"
 
 int spif_hdl;
 
@@ -392,15 +398,25 @@ int main(int argc, char **argv) {
   {
     cfs_t cfs;
     csfs_link(&cfs, 10000);
-    int fd1 = cfs_creat(&cfs, "test1");
-    int fd2 = cfs_creat(&cfs, "test2");
-    int fd3 = cfs_creat(&cfs, "test3");
-    printf("%d\n", fd1);
-    printf("%d\n", fd2);
-    printf("%d\n", fd3);
-    printf("%d\n", cfs_write(&cfs, fd1, "test", 4));
-    printf("%d\n", cfs_write(&cfs, fd2, "test", 4));
-    printf("%d\n", cfs_write(&cfs, fd3, "test", 4));
+    cposfs_link(&cfs, NULL);
+    cfs_mount(&cfs);
+    cfs_validate_file(&cfs,"noexist");
+
+    int cfd = cfs_open(&cfs, "test", CFS_O_RDWR | CFS_O_CREAT | CFS_O_APPEND);
+    cfs_write(&cfs, cfd, buf, 10000);
+    cfs_close(&cfs, cfd);
+    cfd = cfs_open(&cfs, "bob", CFS_O_RDWR | CFS_O_CREAT | CFS_O_APPEND);
+    cfs_close(&cfs, cfd);
+    cfd = cfs_open(&cfs, "adam", CFS_O_RDWR | CFS_O_CREAT | CFS_O_APPEND);
+    cfs_close(&cfs, cfd);
+    cfd = cfs_open(&cfs, "bob2", CFS_O_RDWR | CFS_O_CREAT | CFS_O_APPEND);
+    cfs_close(&cfs, cfd);
+    cfd = cfs_open(&cfs, "cheryl", CFS_O_RDWR | CFS_O_CREAT | CFS_O_APPEND);
+    cfs_close(&cfs, cfd);
+    cfd = cfs_open(&cfs, "duderino", CFS_O_RDWR | CFS_O_CREAT | CFS_O_APPEND);
+    cfs_close(&cfs, cfd);
+    cfs_validate_file(&cfs,"test");
+    cfs_validate_ls(&cfs);
     cfs_free(&cfs);
 
   }

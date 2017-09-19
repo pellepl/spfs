@@ -12,6 +12,7 @@
 #include <errno.h>
 
 #include "cfs_sillyfs.h"
+#include "sillyfs.h"
 
 static int _mount(void *wfs, void *cfg) {
   return sfs_mount((sfs_t *)wfs);
@@ -60,25 +61,62 @@ static int _remove(void *wfs, const char *path){
 static int _rename(void *wfs, const char *old_path, const char *new_path){
   return sfs_rename((sfs_t *)wfs, old_path, new_path);
 }
+#define DIR_POOL_ENTRIES 8
+static sfs_DIR _dpool[DIR_POOL_ENTRIES];
+static int _dpool_used[DIR_POOL_ENTRIES] = {0};
+static int _opendir(void *wfs, cfs_DIR *d, const char *path) {
+  sfs_DIR *sfsd = NULL;
+  int i;
+  for (i = 0; i < DIR_POOL_ENTRIES; i++){
+    if (_dpool_used[i] == 0) {
+      sfsd = &_dpool[i];
+      _dpool_used[i] = 1;
+      break;
+    }
+  }
+  if (i == DIR_POOL_ENTRIES) return -ENOMEM;
+  d->user = sfsd;
+  return sfs_opendir((sfs_t *)wfs, (sfs_DIR *)d->user, path);
+}
+static int _readdir(void *wfs, cfs_DIR *d) {
+  struct sfs_dirent *s = sfs_readdir((sfs_t *)wfs, (sfs_DIR *)d->user);
+  if (s) {
+    strncpy(d->de.name, s->name, sizeof(d->de.name));
+    d->de.size = s->size;
+    return 0;
+  }
+  return -ENOENT;
+}
+static int _closedir(void *wfs, cfs_DIR *d) {
+  int i;
+  for (i = 0; i < DIR_POOL_ENTRIES; i++) {
+    if (_dpool_used[i] && &_dpool[i] == d->user) {
+      _dpool_used[i] = 0;
+      break;
+    }
+  }
+  return 0;
+}
+
 static void _free(void *wfs) {
   sfs_destroy((sfs_t *)wfs);
 }
 static uint32_t _translate_oflags(void *wfs, uint32_t oflags) {
   uint32_t cfs_oflags = 0;
-  if ((oflags & SFS_O_APPEND) == SFS_O_APPEND)  cfs_oflags |= CFS_O_APPEND;
-  if ((oflags & SFS_O_CREAT)  == SFS_O_CREAT)   cfs_oflags |= CFS_O_CREAT;
-  if ((oflags & SFS_O_EXCL)   == SFS_O_EXCL)    cfs_oflags |= CFS_O_EXCL;
-  if ((oflags & SFS_O_RDONLY) == SFS_O_RDONLY)  cfs_oflags |= CFS_O_RDONLY;
-  if ((oflags & SFS_O_RDWR)   == SFS_O_RDWR)    cfs_oflags |= CFS_O_RDWR;
-  if ((oflags & SFS_O_TRUNC)  == SFS_O_TRUNC)   cfs_oflags |= CFS_O_TRUNC;
-  if ((oflags & SFS_O_WRONLY) == SFS_O_WRONLY)  cfs_oflags |= CFS_O_WRONLY;
+  if ((oflags & CFS_O_APPEND) == CFS_O_APPEND)  cfs_oflags |= SFS_O_APPEND;
+  if ((oflags & CFS_O_CREAT)  == CFS_O_CREAT)   cfs_oflags |= SFS_O_CREAT;
+  if ((oflags & CFS_O_EXCL)   == CFS_O_EXCL)    cfs_oflags |= SFS_O_EXCL;
+  if ((oflags & CFS_O_RDONLY) == CFS_O_RDONLY)  cfs_oflags |= SFS_O_RDONLY;
+  if ((oflags & CFS_O_RDWR)   == CFS_O_RDWR)    cfs_oflags |= SFS_O_RDWR;
+  if ((oflags & CFS_O_TRUNC)  == CFS_O_TRUNC)   cfs_oflags |= SFS_O_TRUNC;
+  if ((oflags & CFS_O_WRONLY) == CFS_O_WRONLY)  cfs_oflags |= SFS_O_WRONLY;
   return cfs_oflags;
 }
 static uint32_t _translate_whence(void *wfs, uint32_t whence) {
   switch (whence) {
-  case SFS_SEEK_CUR: return CFS_SEEK_CUR;
-  case SFS_SEEK_SET: return CFS_SEEK_SET;
-  case SFS_SEEK_END: return CFS_SEEK_END;
+  case CFS_SEEK_CUR: return SFS_SEEK_CUR;
+  case CFS_SEEK_SET: return SFS_SEEK_SET;
+  case CFS_SEEK_END: return SFS_SEEK_END;
   }
   return 0;
 }
@@ -106,8 +144,11 @@ void csfs_link(cfs_t *cfs, uint32_t max_size) {
   f->truncate = _truncate;
   f->umount = _umount;
   f->write = _write;
+  f->opendir = _opendir;
+  f->readdir = _readdir;
+  f->closedir = _closedir;
   f->translate_err = _translate_err;
   f->translate_oflags = _translate_oflags;
   f->translate_whence = _translate_whence;
-  cfs_link_fs(cfs, f);
+  cfs_link_fs(cfs, "sillyfs", f);
 }

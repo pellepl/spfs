@@ -28,7 +28,14 @@ BASECFILES := $(wildcard $(srcdir)/*.c)
 TARGET-CALCULATOR = .calculator
 CFILES_CALC = $(srcdir)/$(utildir)/calc.c
 CFILES_TEST = $(wildcard $(srcdir)/$(testdir)/*.c)
+CFILES_TEST += $(wildcard $(srcdir)/$(testdir)/framework/*.c)
 CFILES_MONOLITH = $(srcdir)/spfs_monolith.c
+
+CFLAGS += \
+	-I$(srcdir) \
+	-I$(srcdir)/$(testdir) \
+	-I$(srcdir)/$(testdir)/framework \
+	-I$(srcdir)/$(utildir)
 
 ifeq ($(MONOLITH),y)
 CFILES_FS = $(CFILES_MONOLITH)
@@ -92,7 +99,6 @@ CFLAGS += -D_DBG_FROM_MAKE=1
 endif
 
 LDFLAGS += $(LDFLAGS_GCOV)
-CFLAGS += -Isrc -Isrc/test -Isrc/util
 CFLAGS += $(FLAGS)
 
 ifneq ($(MAKECMDGOALS),clean)

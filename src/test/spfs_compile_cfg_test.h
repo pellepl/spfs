@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "test/spif_emul.h"
+#include "test/framework/spif_emul.h"
 
 #define SPFS_T_CFG_PSZ                  (4096*16*4*1)
 #define SPFS_T_CFG_PADDR_OFFS           (0)

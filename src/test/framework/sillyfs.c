@@ -153,21 +153,20 @@ int sfs_open(sfs_t *fs, const char *path, uint32_t oflags) {
   if ((oflags & SFS_O_CREAT) == 0) {
     if (f_exist == NULL) return -ENOENT;
   }
+  f = f_exist;
   if ((oflags & (SFS_O_CREAT | SFS_O_EXCL)) == (SFS_O_CREAT | SFS_O_EXCL)) {
     // fail if exists
     if (f_exist) return -EEXIST;
-  } else if (oflags & SFS_O_CREAT) {
+  }
+  if (oflags & SFS_O_CREAT) {
     if (f_exist == NULL) {
       f = _file_create(fs, path);
       if (f == NULL) return -ENOMEM;
       oflags &= ~SFS_O_TRUNC; // no need truncing a newly created file
-    } else {
-      f = f_exist;
     }
   }
   if ((oflags & (SFS_O_TRUNC | SFS_O_WRONLY)) == (SFS_O_TRUNC | SFS_O_WRONLY) && f_exist) {
     f_exist->f_size = 0;
-    f = f_exist;
   }
   fd->f = f;
   fd->oflags = oflags;
