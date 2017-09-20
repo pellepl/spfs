@@ -317,8 +317,4 @@ typedef struct spfs_s {
 
 typedef int spfs_file_t;
 
-#if !SPFS_CFG_DYNAMIC
-int spfs_probe(spfs_cfg_t *cfg, uint32_t start_addr, uint32_t end_addr);
-#endif
-
 #endif /* _SPSF_H_ */

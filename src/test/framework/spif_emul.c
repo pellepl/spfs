@@ -79,7 +79,7 @@ int spif_em_create(spif_em_cfg *cfg) {
   // get min blk sz mask
   uint32_t min_blk_sz = 1 << (_ctz(cfg->blk_sz_mask) + SPIF_EM_BLK_SZ_MASK_MIN_BITS);
   uint32_t min_blk_sz_mask = min_blk_sz - 1;
-  uint32_t max_blk_sz = 1 << (32 - _clz(cfg->blk_sz_mask) + SPIF_EM_BLK_SZ_MASK_MIN_BITS);
+  uint32_t max_blk_sz = 1 << (31 - _clz(cfg->blk_sz_mask) + SPIF_EM_BLK_SZ_MASK_MIN_BITS);
   uint32_t max_blk_sz_mask = max_blk_sz - 1;
   if (cfg->size & min_blk_sz_mask) return -ESPIF_EM_CFG_SIZE; // size not even with min block size
   if (cfg->size & max_blk_sz_mask) return -ESPIF_EM_CFG_SIZE; // size not even with max block size
@@ -173,6 +173,8 @@ int spif_em_write(int spif_emul_hdl, uint32_t addr, const uint8_t *buf, uint32_t
   char bitcheck = (wr_flags & SPIF_EM_FL_WR_NO_BITCHECK) == 0;
   char pagewrap = (wr_flags & SPIF_EM_FL_WR_PAGE_WRAP) != 0;
   char failpagewrap = (wr_flags & SPIF_EM_FL_WR_PAGE_WRAP_FAIL) != 0;
+  char datawriteand = (wr_flags & SPIF_EM_FL_WR_OR) == 0;
+  char datawriteset = (wr_flags & SPIF_EM_FL_WR_SET) == 0;
   char timing = (wr_flags & SPIF_EM_FL_IO_NO_TIMING) == 0;
   char abort = (wr_flags & SPIF_EM_FL_IO_NO_ABORT) == 0;
   uint32_t page_addr = (addr / page_size) * page_size;
@@ -215,7 +217,13 @@ int spif_em_write(int spif_emul_hdl, uint32_t addr, const uint8_t *buf, uint32_t
       sf->twr += sf->cfg.write_timings.per_byte_min +
           bits_needing_zeroing_frac * (sf->cfg.write_timings.per_byte_max - sf->cfg.write_timings.per_byte_min);
     }
-    sf->buf[addr] = d & s;
+    if (datawriteand) {
+      sf->buf[addr] = d & s;
+    } else if (datawriteset) {
+      sf->buf[addr] = d;
+    } else {
+      sf->buf[addr] = d | s;
+    }
     addr++;
     if (pagewrap && addr >= page_addr + page_size) {
       addr = page_addr;
@@ -228,7 +236,7 @@ int spif_em_erase(int spif_emul_hdl, uint32_t addr, uint32_t len, uint32_t er_fl
   if (spif_emul_hdl < 0 || spif_emul_hdl >= SPIF_MAX_INST || !_hdl[spif_emul_hdl].resv)
     return -EINVAL;
   spif_emul *sf = &_hdl[spif_emul_hdl];
-  if (addr+len >= sf->cfg.size) {
+  if (addr+len > sf->cfg.size) {
     sf->err_addr = addr + len;
     return -ESPIF_EM_IO_ADDR_OOB;
   }

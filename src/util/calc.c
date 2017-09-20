@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include "spfs.h"
+#include "spfs_fs.h"
 #include "spfs_lowlevel.h"
 #include "spfs_dbg.h"
 
@@ -12,7 +12,7 @@
 #define PAGE_FLAG_BITS          SPFS_PHDR_FLAG_BITS
 #define OIX_NAME_LEN            SPFS_CFG_FILE_NAME_SZ
 #define OIX_HDR_EXTRA_BITINFO   SPFS_CFG_FILE_META_SZ*8
-#define ERROR(x) do {printf("ERROR:" x); goto end;} while (0)
+#define ERROR(x) do {fprintf(stderr, "ERR:" x); goto end;} while (0)
 
 
 // .. simply wonderful
@@ -31,6 +31,8 @@ int main(int argc, char **argv) {
   spfs_t _fs;
   spfs_t *fs = &_fs;
   int err = -1;
+  printf("spfs calculator [fs v%d.%d.%d]\n\n",
+      (SPFS_VERSION >> 12), (SPFS_VERSION >> 8) & 0xf, SPFS_VERSION & 0xff);
   if (argc < 4) {
     printf("usage:\n%s <log block size> <nbr of log blocks> <log page size>\n", argv[0]);
     return err;

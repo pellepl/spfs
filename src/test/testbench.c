@@ -139,7 +139,7 @@ static int _diff_page_ddata(spfs_t *fs, pix_t dpix1, pix_t dpix2) {
   return _diff_page_ldata(fs, _dpix2lpix(fs, dpix1), _dpix2lpix(fs, dpix2));
 }
 
-  static int fs_hal_erase(spfs_t *fs, uint32_t addr, uint32_t size, uint32_t flags) {
+static int fs_hal_erase(spfs_t *fs, uint32_t addr, uint32_t size, uint32_t flags) {
   (void)fs;
   (void)flags;
   //printf("erase %08x sz %08x\n", addr, size);

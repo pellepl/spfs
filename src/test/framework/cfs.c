@@ -26,7 +26,7 @@
 #define CFS_DBG(f, ...)
 #endif
 #define CFS_RD_CHUNK_SZ       4096
-#define MAX_NAME_LEN          256
+#define CFS_MAX_NAME_LEN      256
 #define dbg(f, ...) CFS_DBG(f, ## __VA_ARGS__)
 
 static uint32_t crc32_tab[] = { 0x00000000L, 0x77073096L, 0xee0e612cL,
@@ -417,7 +417,7 @@ int cfs_readdir(cfs_t *cfs, cfs_DIR **d) {
   _cfs_entry_t *cfse = cfs->fs_head;
   cfs_DIR *d2 = *d;
   while (cfse) {
-    memset(d2->de.name, 0, MAX_NAME_LEN);
+    memset(d2->de.name, 0, CFS_MAX_NAME_LEN);
     d2->de.size = 0;
     d2++;
     cfse = cfse->_next;
@@ -525,7 +525,7 @@ int cfs_validate_file(cfs_t *cfs, const char *path) {
 }
 
 typedef struct ls_elem_s {
-  char name[MAX_NAME_LEN];
+  char name[CFS_MAX_NAME_LEN];
   int size;
 } ls_elem_t;
 
@@ -533,7 +533,7 @@ typedef struct ls_elem_s {
 static int comp_name(const void *e1, const void *e2) {
   const ls_elem_t *lse1 = (const ls_elem_t *)e1;
   const ls_elem_t *lse2 = (const ls_elem_t *)e2;
-  return strncmp(lse1->name, lse2->name, MAX_NAME_LEN);
+  return strncmp(lse1->name, lse2->name, CFS_MAX_NAME_LEN);
 }
 static int _validate_ls(cfs_t *cfs, uint8_t check_contents) {
   cfs_DIR d[cfs->fs_cnt];
@@ -569,7 +569,7 @@ static int _validate_ls(cfs_t *cfs, uint8_t check_contents) {
   entries = 0;
   while ((res = cfs_readdir(cfs, &dp)) == 0) {
     for (i = 0; i < cfs->fs_cnt; i++) {
-      strncpy(heads[i][entries].name, d[i].de.name, MAX_NAME_LEN);
+      strncpy(heads[i][entries].name, d[i].de.name, CFS_MAX_NAME_LEN);
       heads[i][entries].size = d[i].de.size;
     }
     entries++;
@@ -615,7 +615,7 @@ static int _validate_ls(cfs_t *cfs, uint8_t check_contents) {
 
     int fs;
     for (fs = 1; fs < cfs->fs_cnt; fs++) {
-      if (strncmp(heads[0][eix].name, heads[fs][eix].name, MAX_NAME_LEN)) {
+      if (strncmp(heads[0][eix].name, heads[fs][eix].name, CFS_MAX_NAME_LEN)) {
         printf("ls inconsistency, got name %s @ %s\n",
             heads[fs][eix].name, heads[0][eix].name);
         res = -1;

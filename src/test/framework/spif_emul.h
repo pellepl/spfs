@@ -52,10 +52,14 @@
 #define SPIF_EM_FL_WR_PAGE_WRAP       (1<<2)
 /* write: do not allow page wraps */
 #define SPIF_EM_FL_WR_PAGE_WRAP_FAIL  (1<<3)
+/* write: OR the data instead of AND */
+#define SPIF_EM_FL_WR_OR              (1<<4)
+/* write: set the data instead of AND */
+#define SPIF_EM_FL_WR_SET             (1<<5)
 /* do not add to timings for this operation */
-#define SPIF_EM_FL_IO_NO_TIMING       (1<<4)
+#define SPIF_EM_FL_IO_NO_TIMING       (1<<6)
 /* do not count these bytes into user abort */
-#define SPIF_EM_FL_IO_NO_ABORT        (1<<5)
+#define SPIF_EM_FL_IO_NO_ABORT        (1<<7)
 
 #ifndef ESPIF_EM_BASE
 #define ESPIF_EM_BASE                 0x1000

@@ -7,6 +7,8 @@
 # DBG = y to enable loads of debug output
 #
 
+.DEFAULT_GOAL := all
+
 srcdir = src
 utildir = util
 testdir = test
@@ -24,11 +26,13 @@ V ?= @
 ADDR-SANI ?=
 DBG ?=
 
-BASECFILES := $(wildcard $(srcdir)/*.c)
 TARGET-CALCULATOR = .calculator
+TARGET-MKIMAGE = .mkimage
+CFILES_BASE := $(wildcard $(srcdir)/*.c)
 CFILES_CALC = $(srcdir)/$(utildir)/calc.c
+CFILES_MKIMAGE = $(srcdir)/$(utildir)/mkimg.c
 CFILES_TEST = $(wildcard $(srcdir)/$(testdir)/*.c)
-CFILES_TEST += $(wildcard $(srcdir)/$(testdir)/framework/*.c)
+CFILES_TEST_BASE = $(wildcard $(srcdir)/$(testdir)/framework/*.c)
 CFILES_MONOLITH = $(srcdir)/spfs_monolith.c
 
 CFLAGS += \
@@ -42,7 +46,7 @@ CFILES_FS = $(CFILES_MONOLITH)
 binary := $(binary)-mono
 FLAGS += -DSPFS_MONOLITH=1
 else
-CFILES_FS = $(filter-out $(CFILES_MONOLITH),$(BASECFILES))
+CFILES_FS = $(filter-out $(CFILES_MONOLITH),$(CFILES_BASE))
 endif
 
 ifeq ($(MAKECMDGOALS), $(TARGET-CALCULATOR))
@@ -50,10 +54,17 @@ ifeq ($(MAKECMDGOALS), $(TARGET-CALCULATOR))
 CFILES := $(CFILES_FS) $(CFILES_CALC)
 binary := $(binary)-calc
 else
+  ifeq ($(MAKECMDGOALS), $(TARGET-MKIMAGE))
+# mkimg
+CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_MKIMAGE)
+FLAGS += -DSPFS_TEST=1
+binary := $(binary)-mkimg
+  else
 # default to the test binary
-CFILES := $(CFILES_FS) $(CFILES_TEST)
+CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_TEST)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-test
+  endif
 endif
 
 OBJFILES = $(CFILES:%.c=$(builddir)/%.o)
@@ -129,8 +140,11 @@ $(DEPFILES) : $(builddir)/%.d:%.c
 
 .PHONY: all test clean
 
+.mkdirs:
+	-$(V)$(MKDIR) $(builddir)
+
 # make all binaries
-all:	$(builddir)/$(binary) calculator
+all:	$(builddir)/$(binary) calculator mkimg
 
 # build and run test suites
 test: GCOV_FILES := $(shell grep -EIr '$(GCOV_ANNOTATION)[0-9]{2}' $(srcdir)/)
@@ -178,8 +192,13 @@ calculator:
 	-DSPFS_DBG_JOURNAL=0 \
 	-DSPFS_DBG_FS=0 \
 	"
-
+	
 $(TARGET-CALCULATOR): $(builddir)/$(binary)
 
-.mkdirs:
-	-$(V)$(MKDIR) $(builddir)
+mkimg:
+	$(V)$(MAKE) $(TARGET-MKIMAGE) FLAGS="\
+	-DSPFS_MKIMG=1 \
+	"
+
+$(TARGET-MKIMAGE): $(builddir)/$(binary)
+
