@@ -28,9 +28,11 @@ DBG ?=
 
 TARGET-CALCULATOR = .calculator
 TARGET-MKIMAGE = .mkimage
+TARGET-UNPDUMP = .unpdump
 CFILES_BASE := $(wildcard $(srcdir)/*.c)
 CFILES_CALC = $(srcdir)/$(utildir)/calc.c
 CFILES_MKIMAGE = $(srcdir)/$(utildir)/mkimg.c
+CFILES_UNPDUMP = $(srcdir)/$(utildir)/unpdump.c
 CFILES_TEST = $(wildcard $(srcdir)/$(testdir)/*.c)
 CFILES_TEST_BASE = $(wildcard $(srcdir)/$(testdir)/framework/*.c)
 CFILES_MONOLITH = $(srcdir)/spfs_monolith.c
@@ -60,10 +62,17 @@ CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_MKIMAGE)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-mkimg
   else
+    ifeq ($(MAKECMDGOALS), $(TARGET-UNPDUMP))
+# unpdump
+CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_UNPDUMP)
+FLAGS += -DSPFS_TEST=1
+binary := $(binary)-unpdump
+    else
 # default to the test binary
 CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_TEST)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-test
+    endif
   endif
 endif
 
@@ -144,7 +153,7 @@ $(DEPFILES) : $(builddir)/%.d:%.c
 	-$(V)$(MKDIR) $(builddir)
 
 # make all binaries
-all:	$(builddir)/$(binary) calculator mkimg
+all:	$(builddir)/$(binary) calculator mkimg unpdump
 
 # build and run test suites
 test: GCOV_FILES := $(shell grep -EIr '$(GCOV_ANNOTATION)[0-9]{2}' $(srcdir)/)
@@ -202,3 +211,9 @@ mkimg:
 
 $(TARGET-MKIMAGE): $(builddir)/$(binary)
 
+unpdump:
+	$(V)$(MAKE) $(TARGET-UNPDUMP) FLAGS="\
+	-DSPFS_MKIMG=1 \
+	"
+
+$(TARGET-UNPDUMP): $(builddir)/$(binary)

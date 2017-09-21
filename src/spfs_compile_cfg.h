@@ -105,6 +105,9 @@
 #ifndef SPFS_DUMP
 #define SPFS_DUMP                         0
 #endif
+#ifndef SPFS_EXPORT
+#define SPFS_EXPORT                       0
+#endif
 
 
 #ifndef BITMANIO_H_WHEREABOUTS

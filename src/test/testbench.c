@@ -15,6 +15,8 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <errno.h>
+
 
 #include "spfs.h"
 #include "spfs_lowlevel.h"
@@ -197,6 +199,35 @@ static void fs_free(void) {
   }
 }
 
+static void store_raw_image(spfs_t *fs, const char *fname) {
+  int fd = open(fname, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, S_IRUSR | S_IWUSR);
+  if (fd < 0) {
+    printf("could not create destination file %s\n%s\n", fname, strerror(errno));
+    return;
+  }
+  int res = SPFS_OK;
+  bix_t lbix;
+  bix_t lbix_end = SPFS_LBLK_CNT(fs);
+  for (lbix = 0; res == SPFS_OK && lbix < lbix_end; lbix++) {
+    pix_t lpix;
+    for (lpix = lbix * SPFS_LPAGES_P_BLK(fs); lpix < (pix_t)((lbix+1) * SPFS_LPAGES_P_BLK(fs)); lpix++) {
+      res = _medium_read(fs, SPFS_LPIX2ADDR(fs, lpix), fs->run.work1, SPFS_CFG_LPAGE_SZ(fs), 0);
+      if (res) {
+        printf("error reading from flash %d %s\n", res, spfs_strerror(res));
+        return;
+      }
+      res = write(fd, fs->run.work1, SPFS_CFG_LPAGE_SZ(fs));
+      if (res < 0) {
+        printf("could not write to file %s\n%s\n", fname, strerror(errno));
+        close(fd);
+        return;
+      }
+      res = SPFS_OK;
+    } // per page
+  } // per block
+  close(fd);
+}
+
 int main(int argc, char **argv) {
   (void)argc;
   (void)argv;
@@ -334,6 +365,8 @@ int main(int argc, char **argv) {
 //  spfs_dump(fs, SPFS_DUMP_NO_DELE | SPFS_DUMP_NO_FREE | SPFS_DUMP_PAGE_DATA);
   spfs_dump(fs, SPFS_DUMP_LS);
   //_diff_page_ddata(fs, 2,3);
+  spfs_export(fs, SPFS_DUMP_EXPORT_META);
+  store_raw_image(fs, "raw.img");
   fs_free();
   printf("end, res %d %s\n", res, spfs_strerror(res));
 
@@ -418,7 +451,6 @@ int main(int argc, char **argv) {
     cfs_validate_file(&cfs,"test");
     cfs_validate_fs(&cfs);
     cfs_free(&cfs);
-
   }
 
   return 0;

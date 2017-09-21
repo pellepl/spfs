@@ -42,15 +42,19 @@ _SPFS_STATIC uint32_t spfs_unpacknum(uint8_t x) {
   return (uint32_t)((2*(x >> 5)+1) * (1 << ((x & 0x1f) + 6)));
 }
 
-_SPFS_STATIC uint16_t spfs_bhdr_chksum(uint8_t *bhdr, uint8_t ignore_gc_state) {
-  uint16_t chk = 0;
+_SPFS_STATIC uint16_t _chksum(uint8_t *data, uint32_t len, uint16_t init_checksum) {
+  uint16_t chk = init_checksum;
   uint16_t i;
-  uint8_t gc_flag = bhdr[8];
-  bhdr[8] |=  (ignore_gc_state ? SPFS_BLK_GC_INACTIVE : 0);
-  for (i = 0; i < SPFS_BLK_HDR_SZ-2; i++) {
+  for (i = 0; i < len; i++) {
     chk = (chk >> 1) + ((chk & 1) << 15);
-    chk += bhdr[i];
+    chk += data[i];
   }
+  return chk;
+}
+
+_SPFS_STATIC uint16_t spfs_bhdr_chksum(uint8_t *bhdr, uint8_t ignore_gc_state) {
+  uint8_t gc_flag = bhdr[8];
+  uint16_t chk = _chksum(bhdr, SPFS_BLK_HDR_SZ-2, 0);
   bhdr[8] = gc_flag;
   return chk;
 }
@@ -198,11 +202,10 @@ _SPFS_STATIC void spfs_bhdr_parse(spfs_bhdr_t *b, uint8_t *bhdr, uint8_t ignore_
   b->lchk = spfs_bhdr_chksum(bhdr, ignore_gc_state);
 }
 
-_SPFS_STATIC int _bhdr_rd(spfs_t *fs, bix_t lbix, spfs_bhdr_t *b) {
-  uint8_t magic_bhdr[SPFS_BLK_HDR_SZ];
-  int res = _medium_read(fs, SPFS_LBLK2ADDR(fs, lbix), magic_bhdr, SPFS_BLK_HDR_SZ, 0);
+_SPFS_STATIC int _bhdr_rd(spfs_t *fs, bix_t lbix, spfs_bhdr_t *bhdr, uint8_t raw[SPFS_BLK_HDR_SZ]) {
+  int res = _medium_read(fs, SPFS_LBLK2ADDR(fs, lbix), raw, SPFS_BLK_HDR_SZ, 0);
   ERR(res);
-  spfs_bhdr_parse(b, magic_bhdr, 1);
+  spfs_bhdr_parse(bhdr, raw, 1);
   return res;
 }
 

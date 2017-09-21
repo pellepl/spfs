@@ -15,10 +15,10 @@
 
 #include "test/framework/spif_emul.h"
 
-#define SPFS_T_CFG_PSZ                  (4096*16*4*1)
+#define SPFS_T_CFG_PSZ                  (1024*16*1)
 #define SPFS_T_CFG_PADDR_OFFS           (0)
-#define SPFS_T_CFG_LBLK_SZ              (4096)
-#define SPFS_T_CFG_PBLK_SZ              (4096)
+#define SPFS_T_CFG_LBLK_SZ              (1024)
+#define SPFS_T_CFG_PBLK_SZ              (1024)
 #define SPFS_T_CFG_LPAGE_SZ             (128)
 
 #define SPFS_CFG_DYNAMIC                1
@@ -37,6 +37,7 @@
 
 #define SPFS_ERRSTR                     1
 #define SPFS_DUMP                       1
+#define SPFS_EXPORT                     1
 #define SPFS_ASSERT                     1
 
 #ifndef _DBG_FROM_MAKE

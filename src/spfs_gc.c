@@ -84,11 +84,12 @@ _SPFS_STATIC int spfs_gc_evacuate(spfs_t *fs, bix_t src_dbix) {
   dbg("dstlbix:"_SPIPRIbl" srcdbix:"_SPIPRIbl" srclbix:"_SPIPRIbl"\n", dst_lbix, src_dbix, src_lbix);
   dbg("fs pre  free:"_SPIPRIi" used:"_SPIPRIi" dele:"_SPIPRIi"\n", fs->run.pfree, fs->run.pused, fs->run.pdele);
 
+  uint8_t raw[SPFS_BLK_HDR_SZ];
   spfs_bhdr_t src_bhdr;
   spfs_bhdr_t dst_bhdr;
-  res = _bhdr_rd(fs, src_lbix, &src_bhdr);
+  res = _bhdr_rd(fs, src_lbix, &src_bhdr, raw);
   ERR(res);
-  res = _bhdr_rd(fs, dst_lbix, &dst_bhdr);
+  res = _bhdr_rd(fs, dst_lbix, &dst_bhdr, raw);
   ERR(res);
 
   // 1. write src block header as GC active
@@ -191,7 +192,8 @@ static int _gc_pick_v(spfs_t *fs, uint32_t lu_entry, spfs_vis_info_t *info,
     arg->pused = 0;
 
     spfs_bhdr_t bhdr;
-    res = _bhdr_rd(fs, info->lbix, &bhdr);
+    uint8_t raw[SPFS_BLK_HDR_SZ];
+    res = _bhdr_rd(fs, info->lbix, &bhdr, raw);
     ERR(res);
     arg->era_cnt = bhdr.era_cnt;
   }

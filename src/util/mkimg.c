@@ -127,12 +127,12 @@ int main(int argc, char **argv) {
   DIR *d = NULL;
   int fd = 0;
 
-  int err = -1;
+  int err = 0;
   printf("spfs mkimg [fs v%d.%d.%d]\n\n",
       (SPFS_VERSION >> 12), (SPFS_VERSION >> 8) & 0xf, SPFS_VERSION & 0xff);
   if (argc < 4) {
     printf("usage:\n%s <log block size> <nbr of log blocks> <log page size> (<data dir>)\n", argv[0]);
-    return err;
+    return 1;
   }
 
   memset(_spfs_mallocs, 0, sizeof(_spfs_mallocs));
@@ -236,9 +236,10 @@ int main(int argc, char **argv) {
   bix_t lbix;
   bix_t lbix_end = SPFS_LBLK_CNT(fs);
   spfs_bhdr_t b;
+  uint8_t raw[SPFS_BLK_HDR_SZ];
 
   for (lbix = 0; res == SPFS_OK && lbix < lbix_end; lbix++) {
-    res = _bhdr_rd(fs, lbix, &b);
+    res = _bhdr_rd(fs, lbix, &b, raw);
     if (res) ERREND("read block hdr fail:%d %s\n", res, spfs_strerror(res));
     b.era_cnt = 0;
     res = _bhdr_write(fs, lbix, b.dbix, 0, 0, _SPFS_HAL_WR_FL_MEM_SET);
@@ -256,7 +257,7 @@ int main(int argc, char **argv) {
 
   // dump spfs fs
   printf("writing image "IMG_FILE"\n");
-  fd = open("spfs.img", O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, S_IRUSR | S_IWUSR);
+  fd = open(IMG_FILE, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, S_IRUSR | S_IWUSR);
   if (fd < 0) {
     err = errno;
     ERREND("could not open %s\n%s\n", IMG_FILE, strerror(errno));
@@ -276,6 +277,7 @@ int main(int argc, char **argv) {
   }
 
   close(fd);
+  fd = 0;
 
 //  spfs_dump(fs, SPFS_DUMP_LS);
 //  spfs_dump(fs, SPFS_DUMP_PAGE_DATA);

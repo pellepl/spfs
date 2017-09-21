@@ -56,6 +56,7 @@ const char *spfs_strerror(int err) {
 
 
 #if SPFS_DUMP
+
 #define _COLS   (uint32_t)16
 static void _dump_data(uint8_t *buf, uint32_t len, uint32_t addr, const char *prefix) {
   uint32_t i;
@@ -77,6 +78,7 @@ static void _dump_data(uint8_t *buf, uint32_t len, uint32_t addr, const char *pr
     SPFS_DUMP_PRINTF("\n");
   }
 }
+
 typedef struct {
   bix_t last_lbix;
   uint32_t flags;
@@ -165,7 +167,8 @@ static int _dump_v(spfs_t *fs, uint32_t lu_entry, spfs_vis_info_t *info, void *v
   _dump_varg_t *arg = (_dump_varg_t *)varg;
   if (info->lbix != arg->last_lbix) {
     spfs_bhdr_t b;
-    res = _bhdr_rd(fs, info->lbix, &b);
+    uint8_t raw[SPFS_BLK_HDR_SZ];
+    res = _bhdr_rd(fs, info->lbix, &b, raw);
     ERR(res);
     if ((arg->flags & SPFS_DUMP_NO_BLOCK_HDRS) == 0) {
       SPFS_DUMP_PRINTF("LBIX:"_SPIPRIbl" DBIX:"_SPIPRIbl" ERA:%04x MAGIC:%04x GC:%s CHK P/L:%04x/%04x\n",
@@ -224,7 +227,7 @@ void spfs_dump(spfs_t *fs, uint32_t dump_flags) {
     SPFS_DUMP_PRINTF("CFG_GC_WEIGHT_FREE   :"_SPIPRIi "\n", SPFS_CFG_GC_WEIGHT_FREE(fs));
     SPFS_DUMP_PRINTF("CFG_GC_WEIGHT_USED   :"_SPIPRIi "\n", SPFS_CFG_GC_WEIGHT_USED(fs));
     SPFS_DUMP_PRINTF("ERRSTR               :"_SPIPRIi "\n", SPFS_ERRSTR);
-}
+  }
 
   if ((dump_flags & SPFS_DUMP_NO_STATE)==0) {
     SPFS_DUMP_PRINTF("config       :"_SPIPRIi "\n", fs->config_state);
@@ -263,5 +266,211 @@ void spfs_dump(spfs_t *fs, uint32_t dump_flags) {
     spfs_page_visit(fs, 0,0,&arg,_dump_v,0);
   }
 }
+#endif // SPFS_DUMP
+
+#if SPFS_EXPORT
+
+static const char tbl_b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static uint32_t enc_base64(const uint8_t *buf, uint8_t *out, uint32_t len) {
+  uint8_t a,b,c;
+  uint32_t olen = 0;
+  while (len >= 3) {
+    a = *buf++;
+    b = *buf++;
+    c = *buf++;
+    out[olen++] = tbl_b64[a >> 2];
+    out[olen++] = tbl_b64[((a & 3) << 4) | (b >> 4)];
+    out[olen++] = tbl_b64[((b & 0x0f) << 2) | (c >> 6)];
+    out[olen++] = tbl_b64[(c & 0x3f)];
+    len -= 3;
+  }
+  if (len == 0) return olen;
+  a = b = 0;
+  if (len == 2) b = buf[1];
+  if (len >= 1) a = buf[0];
+  out[olen++] = tbl_b64[a >> 2];
+  out[olen++] = tbl_b64[((a & 3) << 4) | (b >> 4)];
+  if (len == 1) return olen;
+  out[olen++] = tbl_b64[((b & 0x0f) << 2)];
+  return olen;
+}
+
+#define MAX_PACK_REG    128
+
+static uint32_t _pack_emit(uint8_t *src, uint8_t *dst, uint32_t usix, uint8_t ulen, uint32_t msix, uint8_t mlen) {
+  uint32_t plen = 0;
+  //printf("EMIT ");
+  if (ulen) {
+    //printf("UHD%d[", ulen);
+    //for (i = usix; i < usix+ulen; i++) printf("%c", src[i]);
+    //printf("]");
+    plen += 1 + ulen;
+    if (dst) {
+      *dst++ = (ulen-1);
+      spfs_memcpy(dst, &src[usix], ulen);
+      dst += ulen;
+    }
+  }
+  //if (mlen && ulen) printf("+");
+  if (mlen) {
+    //printf("PHD%d[%c]", mlen, src[msix]);
+    if (dst) {
+      *dst++ = (mlen-1) | 0x80;
+      *dst++ = src[msix];
+    }
+    plen += 1 + 1;
+  }
+  //printf("\n");
+  return plen;
+}
+
+typedef enum {
+  UMAT = 0,
+  MAT
+} pstate_t;
+
+// if dst == NULL, only packed size is calculated
+static uint32_t _rle_pack(uint8_t *dst, uint8_t *src, uint32_t len) {
+  uint8_t *d = dst;
+  uint8_t pbyte = src[0];
+  uint32_t usix = 0;
+  uint8_t ulen = 0;
+  uint32_t msix = 0;
+  uint8_t mlen = 0;
+  uint32_t plen = 0;
+  uint32_t ix;
+  pstate_t st = pbyte == src[1] ? MAT : UMAT;
+  for (ix = 1; ix < len; ix++) {
+    uint8_t byte = src[ix];
+    switch (st) {
+    case UMAT:
+      if (byte == pbyte) {
+        msix = ix - 1;
+        mlen = 1;
+        st = MAT;
+      } else {
+        ulen++;
+        if (ulen >= MAX_PACK_REG) { // unpacked region overflow, emit
+          plen += _pack_emit(src, d, usix, ulen, msix, mlen);
+          if (d) d = &dst[plen];
+          usix = ix;
+          ulen = 0;
+        }
+      }
+      break;
+    case MAT:
+      mlen++;
+      if (byte == pbyte) {
+        if (mlen >= MAX_PACK_REG) { // packed region overflow, emit
+          plen += _pack_emit(src, d, usix, ulen, msix, mlen);
+          if (d) d = &dst[plen];
+          usix = ix;
+          ulen = 0;
+          mlen = 0;
+          st = UMAT;
+        }
+      } else { // transition from matching to unmatchiong, emit
+        plen += _pack_emit(src, d, usix, ulen, msix, mlen);
+        if (d) d = &dst[plen];
+        usix = ix;
+        ulen = 0;
+        mlen = 0;
+        st = UMAT;
+      }
+      break;
+    }
+    pbyte = byte;
+  }
+  if (st == UMAT) ulen++;
+  else            mlen++;
+  plen += _pack_emit(src, d, usix, ulen, msix, mlen);
+  return plen;
+}
+
+static void _output(uint8_t *data, uint8_t *work, uint32_t len, uint32_t max_enc_len) {
+  uint32_t b64l;
+  if (_rle_pack(NULL, data, len) < len) {
+    len = _rle_pack(work, data, len);
+    uint8_t *tmp = work;
+    work = data;
+    data = tmp;
+    SPFS_DUMP_PRINTF("%c", SPFS_EXPORT_HDR_PACKED);
+  } else {
+    SPFS_DUMP_PRINTF("%c", SPFS_EXPORT_HDR_FULL);
+  }
+
+  uint32_t offs = 0;
+  uint32_t i;
+  while (offs < len) {
+    uint32_t esz = max_enc_len < len - offs ? max_enc_len : len - offs;
+    b64l = enc_base64(data, work, esz);
+    for (i = 0; i < b64l; i++) SPFS_DUMP_PRINTF("%c", work[i]);
+    offs += esz;
+    data += esz;
+    if (offs < len) {
+      SPFS_DUMP_PRINTF(",");
+    }
+  }
+}
+
+int spfs_export(spfs_t *fs, uint32_t flags) {
+  int res = SPFS_OK;
+  bix_t lbix;
+  bix_t lbix_end = SPFS_LBLK_CNT(fs);
+  spfs_bhdr_t b;
+  uint8_t raw[SPFS_BLK_HDR_SZ];
+  uint32_t b64l, i;
+  const uint32_t lpgsz = SPFS_CFG_LPAGE_SZ(fs);
+  const uint32_t phdrsz = SPFS_PHDR_SZ(fs);
+  uint16_t chk = 0;
+
+  SPFS_DUMP_PRINTF("\n"SPFS_EXPORT_START);
+  SPFS_DUMP_PRINTF(SPFS_EXPORT_VER"\n",
+      (SPFS_VERSION >> 12), (SPFS_VERSION >> 8) & 0xf, SPFS_VERSION & 0xff);
+
+  fs->run.lbix_gc_free = (bix_t)-1;
+
+  for (lbix = 0; res == SPFS_OK && lbix < lbix_end; lbix++) {
+    pix_t lpix;
+    for (lpix = lbix * SPFS_LPAGES_P_BLK(fs); lpix < (pix_t)((lbix+1) * SPFS_LPAGES_P_BLK(fs)); lpix++) {
+      if (SPFS_LPIXISLU(fs, lpix)) {
+        // lu pix, dump all page
+        res = _medium_read(fs, SPFS_LPIX2ADDR(fs, lpix), fs->run.work1, lpgsz, 0);
+        ERRGO(res);
+        chk = _chksum(fs->run.work1, lpgsz, chk);
+        _output(fs->run.work1, fs->run.work2, lpgsz, lpgsz/2);
+      } else {
+        // data page
+        spfs_phdr_t phdr;
+        res = _medium_read(fs, SPFS_LPIX2ADDR(fs, lpix) + SPFS_DPHDROFFS(fs), fs->run.work1  + SPFS_DPHDROFFS(fs), phdrsz, 0);
+        ERRGO(res);
+        _phdr_rdmem(fs, fs->run.work1 + SPFS_DPHDROFFS(fs), &phdr);
+        if ((phdr.p_flags & SPFS_PHDR_FL_IDX) == 0 || flags == SPFS_DUMP_EXPORT_ALL) {
+          // index header, dump all page
+          res = _medium_read(fs, SPFS_LPIX2ADDR(fs, lpix), fs->run.work1, lpgsz-phdrsz, 0);
+          ERRGO(res);
+          chk = _chksum(fs->run.work1, lpgsz, chk);
+          _output(fs->run.work1, fs->run.work2, lpgsz, lpgsz/2);
+        } else {
+          // dump page header only
+          chk = _chksum(fs->run.work1 + SPFS_DPHDROFFS(fs), phdrsz, chk);
+          _output(fs->run.work1 + SPFS_DPHDROFFS(fs), fs->run.work2, phdrsz, lpgsz/2);
+        }
+      }
+      SPFS_DUMP_PRINTF(".");
+    } // per page
+  } // per block
+
+err:
+  SPFS_DUMP_PRINTF("\n"SPFS_EXPORT_CHK"\n"SPFS_EXPORT_RES"\n", chk, res);
+  SPFS_DUMP_PRINTF(SPFS_EXPORT_END);
+  return res;
+}
+
+
+
+
+
 #endif
 

@@ -533,6 +533,7 @@ _SPFS_STATIC int spfs_page_visit(spfs_t *fs, pix_t start_dpix, pix_t end_dpix, v
 _SPFS_STATIC uint8_t spfs_packnum(uint32_t x);
 _SPFS_STATIC uint32_t spfs_unpacknum(uint8_t x);
 
+_SPFS_STATIC uint16_t _chksum(uint8_t *data, uint32_t len, uint16_t init_checksum);
 _SPFS_STATIC uint16_t spfs_bhdr_chksum(uint8_t *blk_hdr, uint8_t ignore_gc_state);
 _SPFS_STATIC void spfs_bhdr_parse(spfs_bhdr_t *b, uint8_t *bhdr, uint8_t ignore_gc_state);
 
@@ -552,7 +553,7 @@ _SPFS_STATIC int _medium_read(spfs_t *fs, uint32_t addr, uint8_t *dst, uint32_t 
 
 _SPFS_STATIC int _bhdr_write(spfs_t *fs, bix_t lbix, bix_t dbix, uint16_t era,
                              uint8_t gc_active, uint32_t wr_flags);
-_SPFS_STATIC int _bhdr_rd(spfs_t *fs, bix_t lbix, spfs_bhdr_t *b);
+_SPFS_STATIC int _bhdr_rd(spfs_t *fs, bix_t lbix, spfs_bhdr_t *b, uint8_t raw[SPFS_BLK_HDR_SZ]);
 _SPFS_STATIC int _block_erase(spfs_t *fs, bix_t lbix, bix_t dbix, uint16_t era);
 
 _SPFS_STATIC int _lu_write_lpix(spfs_t *fs, pix_t lpix, uint32_t value, uint32_t wr_flags);

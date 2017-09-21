@@ -36,6 +36,19 @@
   (SPFS_DUMP_NO_CFG | SPFS_DUMP_NO_STATE | SPFS_DUMP_NO_FREE | \
    SPFS_DUMP_NO_BLOCK_HDRS | SPFS_DUMP_NO_DELE | SPFS_DUMP_ONLY_SPIX0)
 
+// export, metadata only
+#define SPFS_DUMP_EXPORT_META       (0)
+// export, all data
+#define SPFS_DUMP_EXPORT_ALL        (1)
+
+#define SPFS_EXPORT_START           "SPFS EXPORT START\n"
+#define SPFS_EXPORT_VER             "ver %d.%d.%d"
+#define SPFS_EXPORT_CHK             "CHK:%04x"
+#define SPFS_EXPORT_RES             "RES:%d"
+#define SPFS_EXPORT_END             "SPFS EXPORT END\n"
+#define SPFS_EXPORT_HDR_FULL        'F'
+#define SPFS_EXPORT_HDR_PACKED      'P'
+
 // Defines debug
 
 // Set generic spfs debug output call.
@@ -264,6 +277,10 @@
 
 #if SPFS_DUMP
 void spfs_dump(spfs_t *fs, uint32_t flags);
+#endif
+
+#if SPFS_EXPORT
+int spfs_export(spfs_t *fs, uint32_t flags);
 #endif
 
 #if SPFS_ERRSTR

@@ -133,12 +133,13 @@ static int _mount_scan_blocks(spfs_t *fs) {
   bix_t interrupted_erase_lbix = (bix_t)-1;
   bix_t interrupted_gc_lbix = (bix_t)-1;
   spfs_bhdr_t b;
+  uint8_t raw[SPFS_BLK_HDR_SZ];
 
   fs->run.lbix_gc_free = (bix_t)-1;
 
   for (lbix = 0; res == SPFS_OK && lbix < lbix_end; lbix++) {
     // read and extract block header
-    res = _bhdr_rd(fs, lbix, &b);
+    res = _bhdr_rd(fs, lbix, &b, raw);
     ERR(res);
 //    dbg("lbix:"_SPIPRIbl" magic:"_SPIPRIad" dbix:"_SPIPRIbl" era:"_SPIPRIi
 //             " lblk_sz:"_SPIPRIi" lpage_sz:"_SPIPRIi" gc:"_SPIPRIfl" chk:"_SPIPRIad"\n",
