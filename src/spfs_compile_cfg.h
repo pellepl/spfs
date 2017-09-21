@@ -15,8 +15,8 @@
 
 #if SPFS_TEST
 #include "spfs_compile_cfg_test.h"
-#elif SPFS_MKIMG
-#include "spfs_compile_cfg_mkimg.h"
+#elif SPFS_UTIL
+#include "spfs_compile_cfg_util.h"
 #else
 #include "spfs_compile_cfg_local.h"
 #endif

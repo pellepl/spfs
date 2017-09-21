@@ -1,3 +1,10 @@
+/*
+ * calculator spfs utility
+ *
+ * Calculates common file system stats.
+ * Can be helpful when find a good file system configuration.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>

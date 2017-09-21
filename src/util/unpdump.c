@@ -1,8 +1,9 @@
 /*
- * unpdump.c
+ * unpdump spfs utility
  *
- *  Created on: Sep 21, 2017
- *      Author: petera
+ * Parses logs and finds output from calls to spfs_export.
+ * Decodes and unpacks these dumps to file system images.
+ * Can be used to dump target file systems from e.g. uart.
  */
 
 #include <stdio.h>

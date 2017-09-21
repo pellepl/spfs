@@ -206,14 +206,14 @@ $(TARGET-CALCULATOR): $(builddir)/$(binary)
 
 mkimg:
 	$(V)$(MAKE) $(TARGET-MKIMAGE) FLAGS="\
-	-DSPFS_MKIMG=1 \
+	-DSPFS_UTIL=1 \
 	"
 
 $(TARGET-MKIMAGE): $(builddir)/$(binary)
 
 unpdump:
 	$(V)$(MAKE) $(TARGET-UNPDUMP) FLAGS="\
-	-DSPFS_MKIMG=1 \
+	-DSPFS_UTIL=1 \
 	"
 
 $(TARGET-UNPDUMP): $(builddir)/$(binary)

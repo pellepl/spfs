@@ -1,3 +1,11 @@
+/*
+ * mkimg spfs utility
+ *
+ * Creates a binary file system image containing files.
+ * This image can then be flashed to a target to have an
+ * initial image with files on it.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
