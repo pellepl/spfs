@@ -38,9 +38,10 @@ int main(int argc, char **argv) {
   spfs_t _fs;
   spfs_t *fs = &_fs;
   int err = -1;
-  printf("spfs calculator [fs v%d.%d.%d]\n\n",
+  printf("spfs calculator [fs v%d.%d.%d]\n",
       (SPFS_VERSION >> 12), (SPFS_VERSION >> 8) & 0xf, SPFS_VERSION & 0xff);
   if (argc < 4) {
+    printf("Calculates common file system stats.\n");
     printf("usage:\n%s <log block size> <nbr of log blocks> <log page size>\n", argv[0]);
     return err;
   }

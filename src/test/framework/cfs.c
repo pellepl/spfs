@@ -463,6 +463,17 @@ void cfs_link_fs(cfs_t *cfs, const char *name, cfs_fs_t *fs) {
   cfs->fs_cnt++;
 }
 
+void *cfs_get_fs_by_name(cfs_t *cfs, const char *name) {
+  _cfs_entry_t *e = cfs->fs_head;
+  while (e) {
+    if (strcmp(name, e->wrap->name) == 0) {
+      return e->wrap->fs;
+    }
+    e = e->_next;
+  }
+  return NULL;
+}
+
 int cfs_validate_file(cfs_t *cfs, const char *path) {
   int res = 0;
   // try open

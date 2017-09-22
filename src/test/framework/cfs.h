@@ -10,7 +10,6 @@
 
 #include <stdint.h>
 
-
 #define MAP_BUCKS       8
 
 typedef struct buckelem_s {
@@ -117,6 +116,7 @@ typedef struct {
 
 void cfs_free(cfs_t *cfs);
 void cfs_link_fs(cfs_t *cfs, const char *name, cfs_fs_t *fs);
+void *cfs_get_fs_by_name(cfs_t *cfs, const char *name);
 int cfs_validate_file(cfs_t *cfs, const char *path);
 int cfs_validate_fs(cfs_t *cfs);
 int cfs_validate_ls(cfs_t *cfs);

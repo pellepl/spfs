@@ -43,11 +43,13 @@
 
 #define SPFS_EXPORT_START           "SPFS EXPORT START\n"
 #define SPFS_EXPORT_VER             "ver %d.%d.%d"
+#define SPFS_EXPORT_OCHK            "OCHK:%04x"
 #define SPFS_EXPORT_CHK             "CHK:%04x"
 #define SPFS_EXPORT_RES             "RES:%d"
 #define SPFS_EXPORT_END             "SPFS EXPORT END\n"
-#define SPFS_EXPORT_HDR_FULL        'F'
+#define SPFS_EXPORT_HDR_UNPACKED    'U'
 #define SPFS_EXPORT_HDR_PACKED      'P'
+#define SPFS_EXPORT_HDR_FREE        'F'
 
 // Defines debug
 

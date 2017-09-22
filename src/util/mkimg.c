@@ -136,10 +136,11 @@ int main(int argc, char **argv) {
   int fd = 0;
 
   int err = 0;
-  printf("spfs mkimg [fs v%d.%d.%d]\n\n",
+  printf("spfs mkimg [fs v%d.%d.%d]\n",
       (SPFS_VERSION >> 12), (SPFS_VERSION >> 8) & 0xf, SPFS_VERSION & 0xff);
   if (argc < 4) {
-    printf("usage:\n%s <log block size> <nbr of log blocks> <log page size> (<data dir>)\n", argv[0]);
+    printf("Creates a binary file system image containing files.\n");
+    printf("usage:\n%s <log block size> <nbr of log blocks> <log page size> (<input dir>)\n", argv[0]);
     return 1;
   }
 

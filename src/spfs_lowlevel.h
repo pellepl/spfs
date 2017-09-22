@@ -533,7 +533,7 @@ _SPFS_STATIC int spfs_page_visit(spfs_t *fs, pix_t start_dpix, pix_t end_dpix, v
 _SPFS_STATIC uint8_t spfs_packnum(uint32_t x);
 _SPFS_STATIC uint32_t spfs_unpacknum(uint8_t x);
 
-_SPFS_STATIC uint16_t _chksum(uint8_t *data, uint32_t len, uint16_t init_checksum);
+_SPFS_STATIC uint16_t _chksum(const uint8_t *data, uint32_t len, uint16_t init_checksum);
 _SPFS_STATIC uint16_t spfs_bhdr_chksum(uint8_t *blk_hdr, uint8_t ignore_gc_state);
 _SPFS_STATIC void spfs_bhdr_parse(spfs_bhdr_t *b, uint8_t *bhdr, uint8_t ignore_gc_state);
 

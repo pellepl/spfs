@@ -4,7 +4,7 @@
 # GCOV=y to enable coverage analysis
 # GCOV=f to enable coverage analysis and get coverage output
 # ADDR-SANI=y to enable address sanitizer analysis
-# DBG = y to enable loads of debug output
+# DBG=y to enable loads of debug output
 #
 
 .DEFAULT_GOAL := all
@@ -27,12 +27,14 @@ ADDR-SANI ?=
 DBG ?=
 
 TARGET-CALCULATOR = .calculator
-TARGET-MKIMAGE = .mkimage
+TARGET-MKIMG = .mkimg
 TARGET-UNPDUMP = .unpdump
+TARGET-MOUNT = .mount
 CFILES_BASE := $(wildcard $(srcdir)/*.c)
 CFILES_CALC = $(srcdir)/$(utildir)/calc.c
-CFILES_MKIMAGE = $(srcdir)/$(utildir)/mkimg.c
+CFILES_MKIMG = $(srcdir)/$(utildir)/mkimg.c
 CFILES_UNPDUMP = $(srcdir)/$(utildir)/unpdump.c
+CFILES_MOUNT = $(srcdir)/$(utildir)/mount.c
 CFILES_TEST = $(wildcard $(srcdir)/$(testdir)/*.c)
 CFILES_TEST_BASE = $(wildcard $(srcdir)/$(testdir)/framework/*.c)
 CFILES_MONOLITH = $(srcdir)/spfs_monolith.c
@@ -56,9 +58,9 @@ ifeq ($(MAKECMDGOALS), $(TARGET-CALCULATOR))
 CFILES := $(CFILES_FS) $(CFILES_CALC)
 binary := $(binary)-calc
 else
-  ifeq ($(MAKECMDGOALS), $(TARGET-MKIMAGE))
+  ifeq ($(MAKECMDGOALS), $(TARGET-MKIMG))
 # mkimg
-CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_MKIMAGE)
+CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_MKIMG)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-mkimg
   else
@@ -68,10 +70,18 @@ CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_UNPDUMP)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-unpdump
     else
+	    ifeq ($(MAKECMDGOALS), $(TARGET-MOUNT))
+# fuse mount
+CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_MOUNT)
+FLAGS += -DSPFS_TEST=1 
+LIBS += -lfuse
+binary := $(binary)-mount
+  	  else
 # default to the test binary
 CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_TEST)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-test
+	    endif
     endif
   endif
 endif
@@ -131,16 +141,16 @@ endif
 $(OBJFSFILES): CFLAGS += $(CFLAGS_GCOV)
 
 $(builddir)/$(binary): $(OBJFILES)
-	$(V)@echo "... linking $@"
-	$(V)$(CC) $(LDFLAGS) $(LIBS) -o $@ $(OBJFILES)
+	$(V)@echo "LN\t$@"
+	$(V)$(CC) $(LDFLAGS) -o $@ $(OBJFILES) $(LIBS)
 
 $(OBJFILES) : $(builddir)/%.o:%.c
-	$(V)echo "... compile $@"
+	$(V)echo "CC\t$@"
 	$(V)$(MKDIR) $(@D);
 	$(V)$(CC) $(CFLAGS) -g -c -o $@ $<
 
 $(DEPFILES) : $(builddir)/%.d:%.c
-	$(V)echo "... depend $@"; \
+	$(V)echo "DEP\t$@"; \
 	rm -f $@; \
 	$(MKDIR) $(@D); \
 	$(CC) -M $< > $@.$$$$ 2> /dev/null; \
@@ -153,7 +163,7 @@ $(DEPFILES) : $(builddir)/%.d:%.c
 	-$(V)$(MKDIR) $(builddir)
 
 # make all binaries
-all:	$(builddir)/$(binary) calculator mkimg unpdump
+all:	$(builddir)/$(binary) calculator mkimg unpdump mount
 
 # build and run test suites
 test: GCOV_FILES := $(shell grep -EIr '$(GCOV_ANNOTATION)[0-9]{2}' $(srcdir)/)
@@ -172,7 +182,7 @@ endif
 test-buildonly: $(builddir)/$(binary)
 
 clean:
-	$(V)echo "... clean"
+	$(V)echo "CLEAN"
 	$(V)rm -rf $(builddir)
 	$(V)rm -f *.gcov
 
@@ -187,6 +197,7 @@ info:
 	$(V)echo $(DEPFILES)
 
 calculator:
+	$(V)echo "UTIL\t$@"
 	$(V)$(MAKE) $(TARGET-CALCULATOR) FLAGS="\
 	-DSPFS_CFG_DYNAMIC=1 \
 	-DSPFS_TEST=0 \
@@ -201,19 +212,27 @@ calculator:
 	-DSPFS_DBG_JOURNAL=0 \
 	-DSPFS_DBG_FS=0 \
 	"
-	
 $(TARGET-CALCULATOR): $(builddir)/$(binary)
 
 mkimg:
-	$(V)$(MAKE) $(TARGET-MKIMAGE) FLAGS="\
+	$(V)echo "UTIL\t$@"
+	$(V)$(MAKE) $(TARGET-MKIMG) FLAGS="\
 	-DSPFS_UTIL=1 \
 	"
-
-$(TARGET-MKIMAGE): $(builddir)/$(binary)
+$(TARGET-MKIMG): $(builddir)/$(binary)
 
 unpdump:
+	$(V)echo "UTIL\t$@"
 	$(V)$(MAKE) $(TARGET-UNPDUMP) FLAGS="\
 	-DSPFS_UTIL=1 \
 	"
-
 $(TARGET-UNPDUMP): $(builddir)/$(binary)
+
+mount:
+	$(V)echo "UTIL\t$@"
+	$(V)$(MAKE) $(TARGET-MOUNT) FLAGS="\
+	-DSPFS_UTIL=1 \
+	-D_FILE_OFFSET_BITS=64 \
+	`pkg-config fuse --cflags --libs` \
+	"
+$(TARGET-MOUNT): $(builddir)/$(binary)

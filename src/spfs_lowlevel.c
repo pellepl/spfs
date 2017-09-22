@@ -42,7 +42,7 @@ _SPFS_STATIC uint32_t spfs_unpacknum(uint8_t x) {
   return (uint32_t)((2*(x >> 5)+1) * (1 << ((x & 0x1f) + 6)));
 }
 
-_SPFS_STATIC uint16_t _chksum(uint8_t *data, uint32_t len, uint16_t init_checksum) {
+_SPFS_STATIC uint16_t _chksum(const uint8_t *data, uint32_t len, uint16_t init_checksum) {
   uint16_t chk = init_checksum;
   uint16_t i;
   for (i = 0; i < len; i++) {

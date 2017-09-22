@@ -300,11 +300,7 @@ static uint32_t enc_base64(const uint8_t *buf, uint8_t *out, uint32_t len) {
 
 static uint32_t _pack_emit(uint8_t *src, uint8_t *dst, uint32_t usix, uint8_t ulen, uint32_t msix, uint8_t mlen) {
   uint32_t plen = 0;
-  //printf("EMIT ");
   if (ulen) {
-    //printf("UHD%d[", ulen);
-    //for (i = usix; i < usix+ulen; i++) printf("%c", src[i]);
-    //printf("]");
     plen += 1 + ulen;
     if (dst) {
       *dst++ = (ulen-1);
@@ -312,16 +308,13 @@ static uint32_t _pack_emit(uint8_t *src, uint8_t *dst, uint32_t usix, uint8_t ul
       dst += ulen;
     }
   }
-  //if (mlen && ulen) printf("+");
   if (mlen) {
-    //printf("PHD%d[%c]", mlen, src[msix]);
     if (dst) {
       *dst++ = (mlen-1) | 0x80;
       *dst++ = src[msix];
     }
     plen += 1 + 1;
   }
-  //printf("\n");
   return plen;
 }
 
@@ -388,29 +381,35 @@ static uint32_t _rle_pack(uint8_t *dst, uint8_t *src, uint32_t len) {
   return plen;
 }
 
-static void _output(uint8_t *data, uint8_t *work, uint32_t len, uint32_t max_enc_len) {
+#define outchar(_crc, _c) do { \
+  uint8_t __d = (uint8_t)(_c); \
+  *(_crc) = _chksum(&(__d), 1, *(_crc)); \
+  SPFS_DUMP_PRINTF("%c", (_c)); \
+} while(0)
+
+static void _output(uint8_t *data, uint8_t *work, uint32_t len, uint32_t max_enc_len, uint16_t *ochk) {
   uint32_t b64l;
+  // check if it is worth packing this page
   if (_rle_pack(NULL, data, len) < len) {
     len = _rle_pack(work, data, len);
     uint8_t *tmp = work;
     work = data;
     data = tmp;
-    SPFS_DUMP_PRINTF("%c", SPFS_EXPORT_HDR_PACKED);
+    outchar(ochk, SPFS_EXPORT_HDR_PACKED);
   } else {
-    SPFS_DUMP_PRINTF("%c", SPFS_EXPORT_HDR_FULL);
+    outchar(ochk, SPFS_EXPORT_HDR_UNPACKED);
   }
 
+  // base64 encode packed/unpacked data
   uint32_t offs = 0;
   uint32_t i;
   while (offs < len) {
     uint32_t esz = max_enc_len < len - offs ? max_enc_len : len - offs;
     b64l = enc_base64(data, work, esz);
-    for (i = 0; i < b64l; i++) SPFS_DUMP_PRINTF("%c", work[i]);
+    for (i = 0; i < b64l; i++) outchar(ochk, work[i]);
     offs += esz;
     data += esz;
-    if (offs < len) {
-      SPFS_DUMP_PRINTF(",");
-    }
+    if (offs < len) outchar(ochk, ',');
   }
 }
 
@@ -418,12 +417,12 @@ int spfs_export(spfs_t *fs, uint32_t flags) {
   int res = SPFS_OK;
   bix_t lbix;
   bix_t lbix_end = SPFS_LBLK_CNT(fs);
-  spfs_bhdr_t b;
-  uint8_t raw[SPFS_BLK_HDR_SZ];
   uint32_t b64l, i;
   const uint32_t lpgsz = SPFS_CFG_LPAGE_SZ(fs);
   const uint32_t phdrsz = SPFS_PHDR_SZ(fs);
   uint16_t chk = 0;
+  uint16_t outputchk = 0;
+  uint16_t *ochk = &outputchk;
 
   SPFS_DUMP_PRINTF("\n"SPFS_EXPORT_START);
   SPFS_DUMP_PRINTF(SPFS_EXPORT_VER"\n",
@@ -435,42 +434,43 @@ int spfs_export(spfs_t *fs, uint32_t flags) {
     pix_t lpix;
     for (lpix = lbix * SPFS_LPAGES_P_BLK(fs); lpix < (pix_t)((lbix+1) * SPFS_LPAGES_P_BLK(fs)); lpix++) {
       if (SPFS_LPIXISLU(fs, lpix)) {
-        // lu pix, dump all page
+        // lu pix and/or block hdr, dump all page
         res = _medium_read(fs, SPFS_LPIX2ADDR(fs, lpix), fs->run.work1, lpgsz, 0);
         ERRGO(res);
         chk = _chksum(fs->run.work1, lpgsz, chk);
-        _output(fs->run.work1, fs->run.work2, lpgsz, lpgsz/2);
+        _output(fs->run.work1, fs->run.work2, lpgsz, lpgsz/2, ochk);
+        outchar(ochk, '.'); // page delimiter
       } else {
         // data page
         spfs_phdr_t phdr;
         res = _medium_read(fs, SPFS_LPIX2ADDR(fs, lpix) + SPFS_DPHDROFFS(fs), fs->run.work1  + SPFS_DPHDROFFS(fs), phdrsz, 0);
         ERRGO(res);
         _phdr_rdmem(fs, fs->run.work1 + SPFS_DPHDROFFS(fs), &phdr);
-        if ((phdr.p_flags & SPFS_PHDR_FL_IDX) == 0 || flags == SPFS_DUMP_EXPORT_ALL) {
-          // index header, dump all page
+        if (spfs_signext(phdr.id, SPFS_BITS_ID(fs)) == SPFS_IDFREE) {
+          // free page, dump free header only
+          outchar(ochk, SPFS_EXPORT_HDR_FREE); // no page delimiter for free pages
+        } else if ((phdr.p_flags & SPFS_PHDR_FL_IDX) == 0 || flags == SPFS_DUMP_EXPORT_ALL) {
+          // index header or full dump, dump all page
           res = _medium_read(fs, SPFS_LPIX2ADDR(fs, lpix), fs->run.work1, lpgsz-phdrsz, 0);
           ERRGO(res);
           chk = _chksum(fs->run.work1, lpgsz, chk);
-          _output(fs->run.work1, fs->run.work2, lpgsz, lpgsz/2);
+          _output(fs->run.work1, fs->run.work2, lpgsz, lpgsz/2, ochk);
+          outchar(ochk, '.'); // page delimiter
         } else {
-          // dump page header only
+          // data page, don't dump full, dump page header only
           chk = _chksum(fs->run.work1 + SPFS_DPHDROFFS(fs), phdrsz, chk);
-          _output(fs->run.work1 + SPFS_DPHDROFFS(fs), fs->run.work2, phdrsz, lpgsz/2);
+          _output(fs->run.work1 + SPFS_DPHDROFFS(fs), fs->run.work2, phdrsz, lpgsz/2, ochk);
+          outchar(ochk, '.'); // page delimiter
         }
       }
-      SPFS_DUMP_PRINTF(".");
     } // per page
   } // per block
 
 err:
-  SPFS_DUMP_PRINTF("\n"SPFS_EXPORT_CHK"\n"SPFS_EXPORT_RES"\n", chk, res);
+  SPFS_DUMP_PRINTF("\n"SPFS_EXPORT_OCHK"\n"SPFS_EXPORT_CHK"\n"SPFS_EXPORT_RES"\n", outputchk, chk, res);
   SPFS_DUMP_PRINTF(SPFS_EXPORT_END);
   return res;
 }
 
-
-
-
-
-#endif
+#endif // SPFS_EXPORT
 

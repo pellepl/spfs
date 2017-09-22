@@ -1,8 +1,7 @@
 /*
  * unpdump spfs utility
  *
- * Parses logs and finds output from calls to spfs_export.
- * Decodes and unpacks these dumps to file system images.
+ * Parses logs and creates images from calls to spfs_export.
  * Can be used to dump target file systems from e.g. uart.
  */
 
@@ -31,6 +30,7 @@ typedef enum {
   SCAN = 0,
   VER,
   DATA,
+  OCHECK,
   CHECK,
   RES,
   END
@@ -40,10 +40,11 @@ static pline_state_t state;
 static uint8_t *decodebuf;
 static uint8_t *unpackbuf;
 static uint8_t first_page;
-static uint32_t page_size;
+static uint32_t page_sz;
 static int outfiles = 0;
 static int fdo = -1;
 static uint16_t chk;
+static uint16_t ochk;
 static char dst_path[PATH_MAX];
 
 static uint32_t _rle_unpack(uint8_t *dst, uint8_t *src, uint32_t len) {
@@ -136,12 +137,12 @@ static int unpack_block(char *line, uint32_t len, uint8_t packed) {
   }
 
   if (first_page) {
-    page_size = res_sz; // we know that the first page is always full as it is a meta info page
+    page_sz = res_sz; // we know that the first page is always full as it is a meta info page
     first_page = 0;
   } else {
-    if (res_sz < page_size) {
+    if (res_sz < page_sz) {
       // this was probably only a header, so fill rest with ee
-      uint8_t eebuf[page_size - res_sz];
+      uint8_t eebuf[page_sz - res_sz];
       memset(eebuf, 0xee, sizeof(eebuf));
       res = write(fdo, eebuf, sizeof(eebuf));
       if (res < 0) {
@@ -156,7 +157,7 @@ static int unpack_block(char *line, uint32_t len, uint8_t packed) {
     ERRPRI("could not write to destination file\n%s\n", strerror(errno));
     return -1;
   }
-  return page_size;
+  return page_sz;
 }
 
 static int parse_data(char *line, uint32_t len) {
@@ -169,29 +170,45 @@ static int parse_data(char *line, uint32_t len) {
     }
     if (c == SPFS_EXPORT_HDR_PACKED) {
       // packed data
-    } else if (c == SPFS_EXPORT_HDR_FULL) {
+    } else if (c == SPFS_EXPORT_HDR_UNPACKED) {
       // unpacked data
+    } else if (c == SPFS_EXPORT_HDR_FREE) {
+      // free data
     } else {
       ERRPRI("malformed export data, unexpected export block header '%c'\n", c);
       return -1;
     }
 
-    uint32_t six = ix+1;
-    while (six < len && line[six] != '.') six++;
-    if (six == len) {
-      ERRPRI("malformed export data, no export block footer\n");
-      return -1;
+    if (c == SPFS_EXPORT_HDR_FREE) {
+      // handle free page
+      uint8_t ffbuf[page_sz];
+      memset(ffbuf, 0xff, sizeof(ffbuf));
+      int res = write(fdo, ffbuf, sizeof(ffbuf));
+      if (res < 0) {
+        ERRPRI("could not write to destination file\n%s\n", strerror(errno));
+        return -1;
+      }
+      ix++;
+      res_sz += page_sz;
     } else {
-      int usz;
-      if ((usz = unpack_block(&line[ix+1], six-ix-1, c == SPFS_EXPORT_HDR_PACKED))<0) {
+      // handle packed / unpacked page
+      uint32_t six = ix+1;
+      while (six < len && line[six] != '.') six++;
+      if (six == len) {
+        ERRPRI("malformed export data, no export block footer\n");
         return -1;
       } else {
-        res_sz += usz;
+        int usz;
+        if ((usz = unpack_block(&line[ix+1], six-ix-1, c == SPFS_EXPORT_HDR_PACKED))<0) {
+          return -1;
+        } else {
+          res_sz += usz;
+        }
       }
+      ix = six+1;
     }
-    ix = six+1;
   }
-  printf("  resulting size:%d\n", res_sz);
+  printf("  image size:%d (export size:%d, %.1f%%)\n", res_sz, len, 100.0*(double)len/(double)res_sz);
   return 0;
 }
 
@@ -231,7 +248,8 @@ static int parseline(char *infile, int lnbr, char *line, uint32_t len) {
       ERRPRI("error handling exported data @ line %d, skipping\n", lnbr);
       state = SCAN;
     } else {
-      state = CHECK;
+      ochk = _chksum((uint8_t *)line, len-1, 0); // -1 for the newline
+      state = OCHECK;
     }
     if (fdo > 0) {
       close(fdo);
@@ -239,16 +257,31 @@ static int parseline(char *infile, int lnbr, char *line, uint32_t len) {
     }
     break;
   }
+  case OCHECK:
+  {
+    uint32_t rochk;
+    if (sscanf(line, SPFS_EXPORT_OCHK, &rochk) != 1) {
+      ERRPRI("malformed export checksum @ line %d, skipping\n", lnbr);
+      state = SCAN;
+    } else {
+      if (rochk != ochk) {
+        printf("  export checksum export/local: 0x%04x/0x%04x\n", rochk, ochk);
+        printf("WARNING: this image may be broken, the export checksums differs\n");
+      }
+      state = CHECK;
+    }
+    break;
+  }
   case CHECK:
   {
     uint32_t rchk;
     if (sscanf(line, SPFS_EXPORT_CHK, &rchk) != 1) {
-      ERRPRI("malformed checksum @ line %d, skipping\n", lnbr);
+      ERRPRI("malformed image checksum @ line %d, skipping\n", lnbr);
       state = SCAN;
     } else {
       if (rchk != chk) {
-        printf("  checksum export/local: 0x%04x/0x%04x\n", rchk, chk);
-        printf("WARNING: this image may be broken, the checksums differs\n");
+        printf("  image checksum export/local: 0x%04x/0x%04x\n", rchk, chk);
+        printf("WARNING: this image may be broken, the image checksums differs\n");
       }
       state = RES;
     }
@@ -293,6 +326,16 @@ int main(int argc, char **argv) {
   int lnbr = 0;
   outfiles = 0;
 
+  int err = 0;
+  printf("spfs unpdump [fs v%d.%d.%d]\n",
+      (SPFS_VERSION >> 12), (SPFS_VERSION >> 8) & 0xf, SPFS_VERSION & 0xff);
+  if (argc < 2) {
+    printf("Parses logs and creates images from calls to spfs_export.\n");
+    printf("usage:\n%s <input file>\n", argv[0]);
+    return 1;
+  }
+
+
   decodebuf = malloc(DECODEBUF_SZ); // assume not bigger pages than this
   if (decodebuf == NULL) {
     ERRPRI("out of memory\n");
@@ -304,15 +347,6 @@ int main(int argc, char **argv) {
     ERRPRI("out of memory\n");
     return -1;
   }
-
-  int err = 0;
-  printf("spfs unpdump [fs v%d.%d.%d]\n\n",
-      (SPFS_VERSION >> 12), (SPFS_VERSION >> 8) & 0xf, SPFS_VERSION & 0xff);
-  if (argc < 2) {
-    printf("usage:\n%s <input file>\n", argv[0]);
-    return 1;
-  }
-
   fd = fopen(argv[1], "r");
   if (fd == NULL) {
     err = errno;
