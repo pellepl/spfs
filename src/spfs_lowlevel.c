@@ -397,6 +397,7 @@ _SPFS_STATIC int _page_ixhdr_read(spfs_t *fs, pix_t dpix, spfs_pixhdr_t *pixhdr,
   ERR(res);
   _phdr_rdmem(fs, &mem[SPFS_PIXHDR_SZ(fs)], &pixhdr->phdr);
   _pixhdr_rdmem(fs, mem, pixhdr);
+  pixhdr->fi.id = pixhdr->phdr.id;
   ERRET(res);
 }
 

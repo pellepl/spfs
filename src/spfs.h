@@ -45,6 +45,8 @@
 #endif
 /** all dandy */
 #define SPFS_OK                         (0)
+/** bad argument */
+#define SPFS_ERR_ARG                    (SPFS_ERR_BASE+0)
 /** file system not configured */
 #define SPFS_ERR_UNCONFIGURED           (SPFS_ERR_BASE+1)
 /** file system in an invalid mount state for operation */
@@ -108,6 +110,32 @@
 #define _SPFS_HAL_WR_FL_OVERWRITE   (1<<0)
 #define _SPFS_HAL_WR_FL_IGNORE_BITS (1<<1)
 
+
+
+/* Any write to the filehandle is appended to end of the file */
+#define SPFS_APPEND                   (1<<0)
+#define SPFS_O_APPEND                 SPFS_APPEND
+/* If the opened file exists, it will be truncated to zero length before opened */
+#define SPFS_TRUNC                    (1<<1)
+#define SPFS_O_TRUNC                  SPFS_TRUNC
+/* If the opened file does not exist, it will be created before opened */
+#define SPFS_CREAT                    (1<<2)
+#define SPFS_O_CREAT                  SPFS_CREAT
+/* The opened file may only be read */
+#define SPFS_RDONLY                   (1<<3)
+#define SPFS_O_RDONLY                 SPFS_RDONLY
+/* The opened file may only be written */
+#define SPFS_WRONLY                   (1<<4)
+#define SPFS_O_WRONLY                 SPFS_WRONLY
+/* The opened file may be both read and written */
+#define SPFS_RDWR                     (SPFS_RDONLY | SPFS_WRONLY)
+#define SPFS_O_RDWR                   SPFS_RDWR
+/* Any writes to the filehandle will never be cached but flushed directly */
+#define SPFS_DIRECT                   (1<<5)
+#define SPFS_O_DIRECT                 SPFS_DIRECT
+/* If SPFS_O_CREAT and SPFS_O_EXCL are set, SPFS_open() shall fail if the file exists */
+#define SPFS_EXCL                     (1<<6)
+#define SPFS_O_EXCL                   SPFS_EXCL
 /**
  * Data written with O_REWRITE will not allocate any new pages for the data.
  * Instead, it will simply rewrite existing data with given data. Considering
@@ -119,7 +147,7 @@
  * O_APPEND and O_REWRITE is invalid.
  * Only valid with O_WRONLY or O_RDWR.
  */
-#define SPFS_O_REWRITE              (1<<21)
+#define SPFS_O_REWRITE              (1<<7)
 /**
  * Data written with O_SENSITIVE will be overwritten with zeroes when deleted.
  * Technically, any page having any sensitive bytes in it will be overwritten
@@ -130,7 +158,13 @@
  * malicious attacker.
  * Only valid with O_WRONLY or O_RDWR.
  */
-#define SPFS_O_SENSITIVE            (1<<22)
+#define SPFS_O_SENSITIVE            (1<<8)
+
+
+#define SPFS_SEEK_SET               (0)
+#define SPFS_SEEK_CUR               (1)
+#define SPFS_SEEK_END               (2)
+
 
 #define SPFS_PFREE_RESV             (3)
 
@@ -316,5 +350,40 @@ typedef struct spfs_s {
 } spfs_t;
 
 typedef int spfs_file_t;
+
+struct spfs_stat {
+  id_t id;
+  pix_t dpix;
+  char name[SPFS_CFG_FILE_NAME_SZ];
+  uint32_t size;
+  uint8_t type;
+#if SPFS_CFG_FILE_META_SZ
+  uint8_t meta[SPFS_CFG_FILE_META_SZ];
+#endif
+};
+
+struct spfs_dirent {
+  struct spfs_stat s;
+};
+
+typedef struct spfs_dir {
+  struct spfs_dirent de;
+  pix_t dpix;
+} spfs_DIR;
+
+
+int SPFS_stat(spfs_t *fs, const char *path, struct spfs_stat *buf);
+spfs_file_t SPFS_open(spfs_t *fs, const char *name, int oflags, int mode);
+spfs_file_t SPFS_create(spfs_t *fs, const char *name);
+int SPFS_read(spfs_t *fs, spfs_file_t fh, void *buf, uint32_t len);
+int SPFS_write(spfs_t *fs, spfs_file_t fh, const void *buf, uint32_t len);
+int SPFS_close(spfs_t *fs, spfs_file_t fh);
+int SPFS_remove(spfs_t *fs, const char *path);
+int SPFS_lseek(spfs_t *fs, spfs_file_t fh, int offs, uint8_t whence);
+int SPFS_truncate(spfs_t* fs, const char* path, uint32_t offset);
+int SPFS_ftruncate(spfs_t *fs, spfs_file_t fh, uint32_t offset);
+int SPFS_opendir(spfs_t *fs, spfs_DIR *d, const char *path);
+struct spfs_dirent *SPFS_readdir(spfs_t *fs, spfs_DIR *d);
+int SPFS_closedir(spfs_t *fs, spfs_DIR *d);
 
 #endif /* _SPSF_H_ */

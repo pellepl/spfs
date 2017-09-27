@@ -51,6 +51,7 @@
 #define SPFS_DBG_CACHE                  _DBG_FROM_MAKE
 #define SPFS_DBG_JOURNAL                _DBG_FROM_MAKE
 #define SPFS_DBG_LOWLEVEL               _DBG_FROM_MAKE
+#define SPFS_DBG_HIGHLEVEL              _DBG_FROM_MAKE
 #define SPFS_DBG_LL_MEDIUM_WR           0
 #define SPFS_DBG_LL_MEDIUM_RD           0
 #define SPFS_DBG_LL_MEDIUM_ER           0

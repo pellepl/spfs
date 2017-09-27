@@ -42,7 +42,7 @@ _SPFS_STATIC int _fd_claim(spfs_t *fs, spfs_fd_t **fd) {
     }
     fds++;
   }
-  if (i == fs->run.fd_cnt) res = -SPFS_ERR_OUT_OF_FILEDESCRIPTORS;
+  if (i >= fs->run.fd_cnt) res = -SPFS_ERR_OUT_OF_FILEDESCRIPTORS;
   ERRET(res);
 }
 
@@ -113,7 +113,34 @@ static void _inform(spfs_t *fs, spfs_file_event_t event, id_t id, spfs_file_even
   }
 }
 
+static uint32_t _calc_write_meta_pages(spfs_t *fs, uint32_t cursz, uint32_t offset, uint32_t len) {
+  const uint32_t sz_ix_0 = SPFS_IX_ENT_CNT(fs, 0) * SPFS_DPAGE_SZ(fs);
+  const uint32_t sz_ix_n = SPFS_IX_ENT_CNT(fs, 1) * SPFS_DPAGE_SZ(fs);
+  const uint8_t update_ixhdr_size = (cursz != SPFS_FILESZ_UNDEF) && (offset + len > cursz);
+  const uint8_t update_ixhdr_map = (offset < sz_ix_0);
+  if (update_ixhdr_map) {
+    len -= sz_ix_0 - offset;
+    offset = sz_ix_0;
+  }
+  return ((update_ixhdr_map || update_ixhdr_size) ? 1 : 0) +
+      spfs_ceil(len, sz_ix_n);
+}
 
+static uint32_t _calc_trunc_pages(spfs_t *fs, uint32_t cursz, uint32_t offset) {
+  if (offset == cursz) return 0;
+  const uint32_t sz_ix_0 = SPFS_IX_ENT_CNT(fs, 0) * SPFS_DPAGE_SZ(fs);
+  const uint8_t data_splice_needed = offset % SPFS_DPAGE_SZ(fs);
+  const uint8_t offset_in_ixhdr = offset <= sz_ix_0;
+
+  return
+      // ixhdr: needed for the new size
+      1 +
+      // data: splice needed => new data page
+      (data_splice_needed ? 1 : 0) +
+      // index page needs update, unless this happens to be the
+      // index header page, which is already updated due to size
+      (offset_in_ixhdr ? 0 : 1);
+}
 
 typedef struct {
   uint32_t mask;
@@ -417,7 +444,7 @@ _SPFS_STATIC int spfs_file_read(spfs_t *fs, spfs_fd_t *fd, uint32_t offs, uint32
     fs->run.dpix_find_cursor = offs_ixdpix ? fd->dpix_ix : fd->dpix_ixhdr;
   }
   res = spfs_file_visit(fs, &fd->fi, fd->dpix_ixhdr, offs, len, 0, &arg,
-                        _file_read_v, NULL, fd->fd_flags);
+                        _file_read_v, NULL, fd->fd_oflags);
 
   fd->offset = offs + arg.bytes_written;
 
@@ -728,7 +755,7 @@ _SPFS_STATIC int spfs_file_write(spfs_t *fs, spfs_fd_t *fd, uint32_t offs, uint3
 //  }
 
   // check if this is a rewrite, cap it if needed or error
-  if (fd->fd_flags & SPFS_O_REWRITE) {
+  if (fd->fd_oflags & SPFS_O_REWRITE) {
     if (fd->fi.size == SPFS_FILESZ_UNDEF || offs >= fd->fi.size) {
       ERR(-SPFS_ERR_EOF);
     }
@@ -742,7 +769,7 @@ _SPFS_STATIC int spfs_file_write(spfs_t *fs, spfs_fd_t *fd, uint32_t offs, uint3
       fd->fi.id, fd->fi.size, offs, len);
   _file_write_varg_t arg = {.src = src, .bytes_written = 0};
   res = spfs_file_visit(fs, &fd->fi, fd->dpix_ixhdr, offs, len, 1, &arg,
-                        _file_write_v, _file_write_vix, fd->fd_flags);
+                        _file_write_v, _file_write_vix, fd->fd_oflags);
 
   fd->offset = offs + arg.bytes_written;
 
@@ -770,13 +797,13 @@ static int _file_remove_v(spfs_t *fs, pix_t dpix,
   int res = _lu_page_delete(fs, dpix);
   ERRET(res);
 }
-_SPFS_STATIC int spfs_file_remove(spfs_t *fs, spfs_fd_t *fd) {
+_SPFS_STATIC int spfs_file_fremove(spfs_t *fs, spfs_fd_t *fd) {
   int res;
   dbg("remove id:"_SPIPRIid", size "_SPIPRIi"\n", fd->fi.id, fd->fi.size);
   pix_t dpix_ixhdr = fd->dpix_ixhdr;
   if (fd->fi.size != SPFS_FILESZ_UNDEF) {
     res = spfs_file_visit(fs, &fd->fi, dpix_ixhdr, 0, fd->fi.size, 0, NULL,
-                          _file_remove_v, _file_remove_vix, fd->fd_flags);
+                          _file_remove_v, _file_remove_vix, fd->fd_oflags);
     ERR(res);
   }
   dbg("delete index header dpix:"_SPIPRIpg"\n", dpix_ixhdr);
@@ -787,6 +814,25 @@ _SPFS_STATIC int spfs_file_remove(spfs_t *fs, spfs_fd_t *fd) {
 
   ERRET(res);
 }
+_SPFS_STATIC int spfs_file_remove(spfs_t *fs, const char *path) {
+  pix_t dpix_ixhdr;
+  spfs_pixhdr_t pixhdr;
+  int res = spfs_file_find(fs, path, &dpix_ixhdr, &pixhdr);
+  ERR(res);
+  if (pixhdr.fi.size != SPFS_FILESZ_UNDEF) {
+    res = spfs_file_visit(fs, &pixhdr.fi, dpix_ixhdr, 0, pixhdr.fi.size, 0, NULL,
+                          _file_remove_v, _file_remove_vix, 0);
+    ERR(res);
+  }
+  dbg("delete index header dpix:"_SPIPRIpg"\n", dpix_ixhdr);
+  res = _lu_page_delete(fs, dpix_ixhdr);
+  ERR(res);
+  spfs_file_event_data_t evdata = {.remove={.spix = 0}};
+  _inform(fs, SPFS_F_EV_REMOVE_IX, pixhdr.fi.id, &evdata);
+
+  ERRET(res);
+}
+
 
 #define SPFS_FTR_IXDIRTY_UNDEFINED  (0)
 #define SPFS_FTR_IXDIRTY_DELETE     (1)
@@ -906,11 +952,11 @@ static int _file_trunc_v(spfs_t *fs, pix_t dpix,
   barr8_set(&info->ixarr, info->ixent, new_dpix_ixentry);
   ERRET(res);
 }
-_SPFS_STATIC int spfs_file_truncate(spfs_t *fs, spfs_fd_t *fd, uint32_t target_size) {
+_SPFS_STATIC int spfs_file_ftruncate(spfs_t *fs, spfs_fd_t *fd, uint32_t target_size) {
   int res;
   pix_t dpix_ixhdr = fd->dpix_ixhdr;
   uint32_t current_size = fd->fi.size;
-  dbg("truncate id:"_SPIPRIid" to size "_SPIPRIi" from "_SPIPRIi"\n", fd->fi.id, target_size, current_size);
+  dbg("ftruncate id:"_SPIPRIid" to size "_SPIPRIi" from "_SPIPRIi"\n", fd->fi.id, target_size, current_size);
   if (current_size == SPFS_FILESZ_UNDEF || current_size <= target_size) {
     ERRET(SPFS_OK);
   }
@@ -919,6 +965,26 @@ _SPFS_STATIC int spfs_file_truncate(spfs_t *fs, spfs_fd_t *fd, uint32_t target_s
                             .ixhdr_updated = 0 };
   res = spfs_file_visit(fs, &fd->fi, dpix_ixhdr, target_size,
                         current_size - target_size, 0, &arg,
-                        _file_trunc_v, _file_trunc_vix, fd->fd_flags);
+                        _file_trunc_v, _file_trunc_vix, fd->fd_oflags);
   ERRET(res);
 }
+_SPFS_STATIC int spfs_file_truncate(spfs_t *fs, const char *path, uint32_t target_size) {
+  int res;
+  pix_t dpix_ixhdr;
+  spfs_pixhdr_t pixhdr;
+  res = spfs_file_find(fs, path, &dpix_ixhdr, &pixhdr);
+  ERR(res);
+  uint32_t current_size = pixhdr.fi.size;
+  dbg("truncate path:%s to size "_SPIPRIi" from "_SPIPRIi"\n", path, target_size, current_size);
+  if (current_size == SPFS_FILESZ_UNDEF || current_size <= target_size) {
+    ERRET(SPFS_OK);
+  }
+  _file_trunc_varg_t arg = {.target_size = target_size,
+                            .ixaction = SPFS_FTR_IXDIRTY_UNDEFINED,
+                            .ixhdr_updated = 0 };
+  res = spfs_file_visit(fs, &pixhdr.fi, dpix_ixhdr, target_size,
+                        current_size - target_size, 0, &arg,
+                        _file_trunc_v, _file_trunc_vix, 0);
+  ERRET(res);
+}
+

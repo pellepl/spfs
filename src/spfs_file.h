@@ -27,7 +27,7 @@ typedef struct spfs_fd_s {
   /** file info */
   spfs_fi_t fi;
   /** descriptor flags */
-  uint32_t fd_flags;
+  uint32_t fd_oflags;
 } spfs_fd_t;
 
 
@@ -129,7 +129,9 @@ _SPFS_STATIC int spfs_file_create_fix(spfs_t *fs, spfs_fd_t *fd, const char *nam
 _SPFS_STATIC int spfs_file_read(spfs_t *fs, spfs_fd_t *fd, uint32_t offs, uint32_t len, uint8_t *dst);
 _SPFS_STATIC int spfs_file_write(spfs_t *fs, spfs_fd_t *fd, uint32_t offs, uint32_t len,
                                  const uint8_t *src);
-_SPFS_STATIC int spfs_file_remove(spfs_t *fs, spfs_fd_t *fd);
-_SPFS_STATIC int spfs_file_truncate(spfs_t *fs, spfs_fd_t *fd, uint32_t size);
+_SPFS_STATIC int spfs_file_fremove(spfs_t *fs, spfs_fd_t *fd);
+_SPFS_STATIC int spfs_file_remove(spfs_t *fs, const char *path);
+_SPFS_STATIC int spfs_file_ftruncate(spfs_t *fs, spfs_fd_t *fd, uint32_t size);
+_SPFS_STATIC int spfs_file_truncate(spfs_t *fs, const char *path, uint32_t target_size);
 
 #endif /* _SPFS_FILE_H_ */

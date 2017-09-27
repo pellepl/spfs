@@ -26,15 +26,18 @@ V ?= @
 ADDR-SANI ?=
 DBG ?=
 
+HAVE_FUSE = $(shell pkg-config fuse; echo $$?)
+
 TARGET-CALCULATOR = .calculator
 TARGET-MKIMG = .mkimg
 TARGET-UNPDUMP = .unpdump
 TARGET-MOUNT = .mount
 CFILES_BASE := $(wildcard $(srcdir)/*.c)
-CFILES_CALC = $(srcdir)/$(utildir)/calc.c
+CFILES_CALC = $(srcdir)/$(utildir)/calc.c 
 CFILES_MKIMG = $(srcdir)/$(utildir)/mkimg.c
 CFILES_UNPDUMP = $(srcdir)/$(utildir)/unpdump.c
 CFILES_MOUNT = $(srcdir)/$(utildir)/mount.c
+CFILES_UTIL_XTRA = $(srcdir)/$(utildir)/spfs_util_lock.c
 CFILES_TEST = $(wildcard $(srcdir)/$(testdir)/*.c)
 CFILES_TEST_BASE = $(wildcard $(srcdir)/$(testdir)/framework/*.c)
 CFILES_MONOLITH = $(srcdir)/spfs_monolith.c
@@ -55,33 +58,33 @@ endif
 
 ifeq ($(MAKECMDGOALS), $(TARGET-CALCULATOR))
 # calculator
-CFILES := $(CFILES_FS) $(CFILES_CALC)
+CFILES := $(CFILES_FS) $(CFILES_CALC) $(CFILES_UTIL_XTRA)
 binary := $(binary)-calc
 else
   ifeq ($(MAKECMDGOALS), $(TARGET-MKIMG))
 # mkimg
-CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_MKIMG)
+CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_MKIMG) $(CFILES_UTIL_XTRA)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-mkimg
   else
     ifeq ($(MAKECMDGOALS), $(TARGET-UNPDUMP))
 # unpdump
-CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_UNPDUMP)
+CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_UNPDUMP) $(CFILES_UTIL_XTRA)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-unpdump
     else
-	    ifeq ($(MAKECMDGOALS), $(TARGET-MOUNT))
+      ifeq ($(MAKECMDGOALS), $(TARGET-MOUNT))
 # fuse mount
-CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_MOUNT)
-FLAGS += -DSPFS_TEST=1 
-LIBS += -lfuse
+CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_MOUNT) $(CFILES_UTIL_XTRA)
+FLAGS += -DSPFS_TEST=1
+LIBS += `pkg-config fuse --libs` -lpthread
 binary := $(binary)-mount
-  	  else
+      else
 # default to the test binary
 CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_TEST)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-test
-	    endif
+      endif
     endif
   endif
 endif
@@ -162,8 +165,13 @@ $(DEPFILES) : $(builddir)/%.d:%.c
 .mkdirs:
 	-$(V)$(MKDIR) $(builddir)
 
+ALL = calculator mkimg unpdump
+ifeq ($(HAVE_FUSE),0)
+ALL += mount
+endif
+
 # make all binaries
-all:	$(builddir)/$(binary) calculator mkimg unpdump mount
+all:	$(ALL)
 
 # build and run test suites
 test: GCOV_FILES := $(shell grep -EIr '$(GCOV_ANNOTATION)[0-9]{2}' $(srcdir)/)
@@ -195,6 +203,8 @@ info:
 	$(V)echo $(LDFLAGS)
 	$(V)echo DEPFILES
 	$(V)echo $(DEPFILES)
+	$(V)echo HAVE_FUSE
+	$(V)echo $(HAVE_FUSE)
 
 calculator:
 	$(V)echo "UTIL\t$@"
@@ -206,6 +216,7 @@ calculator:
 	-DSPFS_ASSERT=0 \
 	-DSPFS_DBG_ERROR=0 \
 	-DSPFS_DBG_LOWLEVEL=0 \
+	-DSPFS_DBG_HIGHLEVEL=0 \
 	-DSPFS_DBG_CACHE=0 \
 	-DSPFS_DBG_FILE=0 \
 	-DSPFS_DBG_GC=0 \
@@ -230,9 +241,10 @@ $(TARGET-UNPDUMP): $(builddir)/$(binary)
 
 mount:
 	$(V)echo "UTIL\t$@"
+	$(V)pkg-config fuse || (echo "libfuse-dev must be installed")
 	$(V)$(MAKE) $(TARGET-MOUNT) FLAGS="\
 	-DSPFS_UTIL=1 \
 	-D_FILE_OFFSET_BITS=64 \
-	`pkg-config fuse --cflags --libs` \
+	`pkg-config fuse --cflags` \
 	"
 $(TARGET-MOUNT): $(builddir)/$(binary)

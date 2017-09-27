@@ -114,10 +114,10 @@ int main(int argc, char **argv) {
   uint32_t oix_hdr_sz = spfs_ceil(b_oix_hdr, 8);
   printf("IX0 hdr size:          %dB, %db\n", oix_hdr_sz, b_oix_hdr);
 
-  uint32_t ent_ix0 = SPFS_LU_ENT_CNT(fs, 0);
+  uint32_t ent_ix0 = SPFS_IX_ENT_CNT(fs, 0);
   printf("Entries in IX0 page:   %d\n", ent_ix0);
 
-  uint32_t ent_ix = SPFS_LU_ENT_CNT(fs, 1);
+  uint32_t ent_ix = SPFS_IX_ENT_CNT(fs, 1);
   printf("Entries in IX page:    %d\n", ent_ix);
 
 

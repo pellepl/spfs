@@ -99,6 +99,13 @@
 #endif
 
 
+#ifndef SPFS_LOCK
+#define SPFS_LOCK(fs)
+#endif
+#ifndef SPFS_UNLOCK
+#define SPFS_UNLOCK(fs)
+#endif
+
 #ifndef SPFS_ERRSTR
 #define SPFS_ERRSTR                       0
 #endif

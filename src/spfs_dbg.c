@@ -18,6 +18,7 @@
 const char *spfs_strerror(int err) {
   switch (err) {
   CASE(SPFS_OK);
+  ERRCASE(SPFS_ERR_ARG);
   ERRCASE(SPFS_ERR_UNCONFIGURED);
   ERRCASE(SPFS_ERR_MOUNT_STATE);
   ERRCASE(SPFS_ERR_LU_PHDR_ID_MISMATCH);

@@ -514,11 +514,12 @@ static int _try_header_span(_prober_t *p, uint32_t addr, spfs_bhdr_t *bhdr) {
   return res < 0 ? res : (fs_identified ? 1 : 0);
 }
 
-_SPFS_STATIC int spfs_probe(spfs_cfg_t *cfg, uint32_t start_addr, uint32_t end_addr) {
+_SPFS_STATIC int spfs_probe(spfs_cfg_t *cfg, uint32_t start_addr, uint32_t end_addr, void *user) {
   int res;
   uint8_t mem[SPFS_CFG_COPY_BUF_SZ];
   spfs_t dummy_fs;
   spfs_memcpy(&dummy_fs.cfg, cfg, sizeof(spfs_cfg_t));
+  dummy_fs.user = user;
 
   dbg("start:"_SPIPRIad" end:"_SPIPRIad"\n", start_addr, end_addr);
 

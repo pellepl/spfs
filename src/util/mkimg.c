@@ -25,7 +25,7 @@
 #include "spif_emul.h"
 
 
-#define IMG_FILE "spfs.img"
+#define DEFAULT_IMG_FILE "spfs.img"
 #define ERRPRI(f, ...) do {fprintf(stderr, "ERR:" f, ## __VA_ARGS__); } while (0)
 #define ERREND(f, ...) do {fprintf(stderr, "ERR:" f, ## __VA_ARGS__); goto end;} while (0)
 #define _SPFS_HAL_WR_FL_MEM_OR      (0xfe)
@@ -140,7 +140,8 @@ int main(int argc, char **argv) {
       (SPFS_VERSION >> 12), (SPFS_VERSION >> 8) & 0xf, SPFS_VERSION & 0xff);
   if (argc < 4) {
     printf("Creates a binary file system image containing files.\n");
-    printf("usage:\n%s <log block size> <nbr of log blocks> <log page size> (<input dir>)\n", argv[0]);
+    printf("usage:\n%s <log block size> <nbr of log blocks> <log page size> (-i <input dir>) (-o <output file>)\n", argv[0]);
+    printf("If -i is omitted, an empty file system is created.\n");
     return 1;
   }
 
@@ -151,11 +152,25 @@ int main(int argc, char **argv) {
   uint32_t page_sz = (int)strtol(argv[3], NULL, 0);
   uint32_t fs_sz = blk_sz * blk_cnt;
 
-  char path[PATH_MAX];
-  if (argc > 4) {
-    realpath(argv[4], path);
-  } else {
-    realpath(".", path);
+  char _ipath[PATH_MAX];
+  char *ipath = NULL;
+  char _opath[PATH_MAX];
+  char *opath = NULL;
+  int arg = 4;
+  while (arg < argc) {
+    if (strcmp("-i", argv[arg]) == 0 && arg + 1 < argc) {
+      realpath(argv[++arg], _ipath);
+      ipath = _ipath;
+    }
+    else if (strcmp("-o", argv[arg]) == 0 && arg + 1 < argc) {
+      realpath(argv[++arg], _opath);
+      opath = _opath;
+    }
+    arg++;
+  }
+  if (opath == NULL) {
+    opath = _opath;
+    sprintf(opath, "%s", DEFAULT_IMG_FILE);
   }
 
   // config format mount
@@ -185,76 +200,80 @@ int main(int argc, char **argv) {
   res = spfs_mount(fs, 0, 4, 16);
   if (res) ERREND("mount fail:%d %s\n", res, spfs_strerror(res));
 
-  // scan directory, add files
-  printf("adding files from %s\n", path);
-  struct dirent *de;
-  d = opendir(path);
-  if (d == NULL) {
-    err = errno;
-    ERREND("could not open %s\n%s\n", path, strerror(errno));
+  if (ipath) {
+    // scan directory, add files
+    printf("adding files from %s\n", ipath);
+    struct dirent *de;
+    d = opendir(ipath);
+    if (d == NULL) {
+      err = errno;
+      ERREND("could not open %s\n%s\n", ipath, strerror(errno));
+    }
+    while ((de = readdir(d))) {
+      char fpath[PATH_MAX];
+      snprintf(fpath, PATH_MAX, "%s/%s", ipath, de->d_name);
+      struct stat path_stat;
+      res = stat(fpath, &path_stat);
+      if (res) {
+        err = errno;
+        ERREND("could not stat %s\n%s\n", fpath, strerror(errno));
+      }
+      if (!S_ISREG(path_stat.st_mode)) continue;
+      printf("  %s (%ld bytes)\n", de->d_name, path_stat.st_size);
+
+      spfs_fd_t *spfs_fd;
+      _fd_claim(fs, &spfs_fd);
+      res = spfs_file_create(fs, spfs_fd, de->d_name);
+      spfs_fd->fd_oflags |= SPFS_O_SENSITIVE;
+      if (res) ERREND("create fail:%d %s\n", res, spfs_strerror(res));
+
+      fd = open(fpath, O_RDONLY);
+      if (fd < 0) {
+        err = errno;
+        ERREND("could not open %s\n%s\n", fpath, strerror(errno));
+      }
+
+      uint8_t buf[4096];
+      int rd;
+      uint32_t offs = 0;
+      while ((rd = read(fd, buf, sizeof(buf))) > 0) {
+        res = spfs_file_write(fs, spfs_fd, offs, rd, buf);
+        if (res != rd) ERREND("write fail:%d %s\n", res, spfs_strerror(res));
+        offs += rd;
+      }
+
+      if (rd < 0) {
+        err = errno;
+        ERREND("could not read %s\n%s\n", fpath, strerror(errno));
+      }
+
+      _fd_release(fs, spfs_fd);
+      close(fd);
+      fd = 0;
+    }
+
+    // scan spfs fs, free deleted pages
+    res = spfs_page_visit(fs, 0, 0, NULL, page_free_v, 0);
+    if (res == -SPFS_ERR_VIS_END) res = 0;
+    if (res) ERREND("freeing pages fail:%d %s\n", res, spfs_strerror(res));
+
+    // reset block headers erase count
+    bix_t lbix;
+    bix_t lbix_end = SPFS_LBLK_CNT(fs);
+    spfs_bhdr_t b;
+    uint8_t raw[SPFS_BLK_HDR_SZ];
+
+    for (lbix = 0; res == SPFS_OK && lbix < lbix_end; lbix++) {
+      res = _bhdr_rd(fs, lbix, &b, raw);
+      if (res) ERREND("read block hdr fail:%d %s\n", res, spfs_strerror(res));
+      b.era_cnt = 0;
+      res = _bhdr_write(fs, lbix, b.dbix, 0, 0, _SPFS_HAL_WR_FL_MEM_SET);
+      if (res) ERREND("write block hdr fail:%d %s\n", res, spfs_strerror(res));
+    } // per block
+  } else {
+    // empty fs
+    printf("creating empty file system\n");
   }
-  while ((de = readdir(d))) {
-    char fpath[PATH_MAX];
-    snprintf(fpath, PATH_MAX, "%s/%s", path, de->d_name);
-    struct stat path_stat;
-    res = stat(fpath, &path_stat);
-    if (res) {
-      err = errno;
-      ERREND("could not stat %s\n%s\n", fpath, strerror(errno));
-    }
-    if (!S_ISREG(path_stat.st_mode)) continue;
-    printf("  %s (%ld bytes)\n", de->d_name, path_stat.st_size);
-
-    spfs_fd_t *spfs_fd;
-    _fd_claim(fs, &spfs_fd);
-    res = spfs_file_create(fs, spfs_fd, de->d_name);
-    spfs_fd->fd_flags |= SPFS_O_SENSITIVE;
-    if (res) ERREND("create fail:%d %s\n", res, spfs_strerror(res));
-
-    fd = open(fpath, O_RDONLY);
-    if (fd < 0) {
-      err = errno;
-      ERREND("could not open %s\n%s\n", fpath, strerror(errno));
-    }
-
-    uint8_t buf[4096];
-    int rd;
-    uint32_t offs = 0;
-    while ((rd = read(fd, buf, sizeof(buf))) > 0) {
-      res = spfs_file_write(fs, spfs_fd, offs, rd, buf);
-      if (res != rd) ERREND("write fail:%d %s\n", res, spfs_strerror(res));
-      offs += rd;
-    }
-
-    if (rd < 0) {
-      err = errno;
-      ERREND("could not read %s\n%s\n", fpath, strerror(errno));
-    }
-
-    _fd_release(fs, spfs_fd);
-    close(fd);
-    fd = 0;
-  }
-
-  // scan spfs fs, free deleted pages
-  res = spfs_page_visit(fs, 0, 0, NULL, page_free_v, 0);
-  if (res == -SPFS_ERR_VIS_END) res = 0;
-  if (res) ERREND("freeing pages fail:%d %s\n", res, spfs_strerror(res));
-
-  // reset block headers erase count
-  bix_t lbix;
-  bix_t lbix_end = SPFS_LBLK_CNT(fs);
-  spfs_bhdr_t b;
-  uint8_t raw[SPFS_BLK_HDR_SZ];
-
-  for (lbix = 0; res == SPFS_OK && lbix < lbix_end; lbix++) {
-    res = _bhdr_rd(fs, lbix, &b, raw);
-    if (res) ERREND("read block hdr fail:%d %s\n", res, spfs_strerror(res));
-    b.era_cnt = 0;
-    res = _bhdr_write(fs, lbix, b.dbix, 0, 0, _SPFS_HAL_WR_FL_MEM_SET);
-    if (res) ERREND("write block hdr fail:%d %s\n", res, spfs_strerror(res));
-  } // per block
-
 
   double used = fs->run.pused * SPFS_CFG_LPAGE_SZ(fs);
   double free = fs->run.pfree * SPFS_CFG_LPAGE_SZ(fs);
@@ -263,13 +282,12 @@ int main(int argc, char **argv) {
   printf("used:%0.1fkB free:%0.1fkB\n",
       used/1024, (free+dele) / 1024);
 
-
   // dump spfs fs
-  printf("writing image "IMG_FILE"\n");
-  fd = open(IMG_FILE, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, S_IRUSR | S_IWUSR);
+  printf("writing image %s\n", opath);
+  fd = open(opath, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, S_IRUSR | S_IWUSR);
   if (fd < 0) {
     err = errno;
-    ERREND("could not open %s\n%s\n", IMG_FILE, strerror(errno));
+    ERREND("could not open %s\n%s\n", opath, strerror(errno));
   }
 
   uint8_t *data;
@@ -279,7 +297,7 @@ int main(int argc, char **argv) {
     int wr = write(fd, data, fs_sz - offs);
     if (wr < 0) {
       err = errno;
-      ERREND("could not write %s\n%s\n", IMG_FILE, strerror(errno));
+      ERREND("could not write %s\n%s\n", opath, strerror(errno));
     }
     offs += wr;
     data += wr;

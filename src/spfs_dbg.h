@@ -98,6 +98,10 @@
 #ifndef SPFS_DBG_GC
 #define SPFS_DBG_GC             0
 #endif
+// enable or disable api implementation debug output
+#ifndef SPFS_DBG_HIGHLEVEL
+#define SPFS_DBG_HIGHLEVEL      0
+#endif
 // enable or disable debug on lowlevel medium write
 #ifndef SPFS_DBG_LL_MEDIUM_WR
 #define SPFS_DBG_LL_MEDIUM_WR   0
@@ -160,6 +164,7 @@
 #define ANSI_COLOR_RED     "\x1b[31;1m"
 #define ANSI_COLOR_BLUE    "\x1b[34;1m"
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_PINK    "\x1b[35;1m"
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 #else
@@ -209,11 +214,21 @@
 #define SPFS_ERRMSG(_x)
 #endif
 
-// print if error
+// print and return if error
 #define ERR(_x) do { \
     int ___res = (_x); \
     if (___res) { \
       SPFS_ERRMSG(___res); \
+      return ___res; \
+    } \
+  } while(0)
+
+// print, unlock, and return if error
+#define ERRUNLOCK(_x) do { \
+    int ___res = (_x); \
+    if (___res) { \
+      SPFS_ERRMSG(___res); \
+      SPFS_UNLOCK(fs); \
       return ___res; \
     } \
   } while(0)
@@ -269,6 +284,12 @@
   SPFS_DBG("%s.%-30s. "_f"%s", _SPFS_DBG_PRE, __func__ ,## __VA_ARGS__, _SPFS_DBG_POST)
 #else
 #define dbg_gc(_f, ...)
+#endif
+#if SPFS_DBG_HIGHLEVEL
+#define dbg_hl(_f, ...) \
+  SPFS_DBG("%s.%-30s. "_f"%s", _SPFS_DBG_PRE, __func__ ,## __VA_ARGS__, _SPFS_DBG_POST)
+#else
+#define dbg_hl(_f, ...)
 #endif
 
 #if SPFS_ASSERT

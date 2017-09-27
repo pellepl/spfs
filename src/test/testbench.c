@@ -317,7 +317,7 @@ int main(int argc, char **argv) {
 
   spfs_cfg_t cfg2;
   cfg2.read = fs_hal_read;
-  spfs_probe(&cfg2, 0, 1000000);
+  spfs_probe(&cfg2, 0, 1000000, NULL);
 
   spfs_fd_t *fd;
   _fd_claim(fs, &fd);
@@ -335,7 +335,7 @@ int main(int argc, char **argv) {
   _dump_file(fs, fd, 0, fd->fi.size);
 
   printf("\n\nwrite sensitive\n\n");
-  fd->fd_flags = SPFS_O_SENSITIVE;
+  fd->fd_oflags = SPFS_O_SENSITIVE;
   res = spfs_file_write(fs, fd, 200, 10000, buf);
   printf("%d\n", res);
   if (res < 0) goto end;
@@ -344,21 +344,33 @@ int main(int argc, char **argv) {
   uint8_t buf2[500];
   memset(buf2, 0xf0, 500);
   printf("\n\nrewrite\n\n");
-  fd->fd_flags = SPFS_O_REWRITE;
+  fd->fd_oflags = SPFS_O_REWRITE;
   res = spfs_file_write(fs, fd, 500, 500, buf2);
   printf("%d\n", res);
   if (res < 0) goto end;
   _dump_file(fs, fd, 490,520);
 
   printf("\n\ntrunc\n\n");
-  res = spfs_file_truncate(fs, fd, 100);
+  res = spfs_file_ftruncate(fs, fd, 100);
   printf("%d\n", res);
   if (res < 0) goto end;
   _dump_file(fs, fd, 0, 124);
 
-  res = spfs_file_remove(fs, fd);
+//  res = spfs_file_remove(fs, fd);
+//  printf("%d\n", res);
+//  if (res < 0) goto end;
+
+
+  spfs_file_t fh = SPFS_open(fs, "somefile", SPFS_O_RDONLY, 0);
+  if (fh < 0) {res = fh; goto end;}
+  uint8_t rdbuf[120];
+  res = SPFS_read(fs, fh, rdbuf, 120);
   printf("%d\n", res);
   if (res < 0) goto end;
+  res = SPFS_close(fs, fh);
+  printf("%d\n", res);
+  if (res < 0) goto end;
+
 
   end:
   spfs_gc(fs);
@@ -452,6 +464,7 @@ int main(int argc, char **argv) {
     cfs_validate_fs(&cfs);
     cfs_free(&cfs);
   }
+
 
   return 0;
 }
