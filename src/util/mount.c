@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
+#include <signal.h>
 #include "spfs.h"
 #include "spfs_lowlevel.h"
 #include "spfs_file.h"
@@ -37,6 +38,7 @@ typedef struct {
   uint8_t *img;
   uint32_t img_sz;
   pthread_mutex_t *spfs_mutex;
+  uint8_t ro;
 } st_t;
 
 static st_t _st;
@@ -59,8 +61,9 @@ static void *fuse_spfs_init(struct fuse_conn_info *conn) {
 }
 
 static void fuse_spfs_destroy(void *private_data) {
+  st_t *sts = (st_t *)private_data;
   fdbg("%s\n", __func__);
-  cleanup((st_t *)private_data);
+  cleanup(sts);
 }
 
 static int fuse_spfs_getattr(const char *path, struct stat *stbuf) {
@@ -74,7 +77,7 @@ static int fuse_spfs_getattr(const char *path, struct stat *stbuf) {
     struct spfs_stat buf;
     res = SPFS_stat(st->fs, path+1, &buf);
     if (res == SPFS_OK) {
-      stbuf->st_mode = S_IFREG | 0640;
+      stbuf->st_mode = S_IFREG | (st->ro ? 0440 : 0640);
       stbuf->st_nlink = 1;
       stbuf->st_size = buf.size;
     } else {
@@ -130,11 +133,13 @@ static int fuse_spfs_read(const char *path, char *buf, size_t size, off_t offset
 static int fuse_spfs_write(const char *name, const char *buf, size_t size, off_t offset,
         struct fuse_file_info *fi) {
   fdbg("%s %s fh:%d offs:%d size:%d\n", __func__, name, fi->fh, offset, size);
+  if (st->ro) return -EACCES;
   int res;
   res = SPFS_lseek(st->fs, fi->fh, offset, SPFS_SEEK_SET);
   if (res < 0) return -EIO;
   res = SPFS_write(st->fs, fi->fh, (const uint8_t *)buf, size);
   if (res < 0) return -EIO;
+
   return res;
 }
 
@@ -146,13 +151,14 @@ static int fuse_spfs_release(const char *path, struct fuse_file_info *fi) {
   return res;
 }
 
-static int fuse_spfs_fsync(const char *name, int what, struct fuse_file_info *fsync) {
+static int fuse_spfs_fsync(const char *name, int isdatadir, struct fuse_file_info *fsync) {
   fdbg("%s %s\n", __func__, name);
   return 0;
 }
 
 static int fuse_spfs_create(const char *name, mode_t mode, struct fuse_file_info *fi) {
   fdbg("%s %s\n", __func__, name);
+  if (st->ro) return -EACCES;
   int res = SPFS_create(st->fs, name+1);
   if (res < 0) return -EIO;
   fi->fh = res;
@@ -165,6 +171,7 @@ static int fuse_spfs_access(const char *name, int mode) {
 }
 static int fuse_spfs_unlink(const char *name) {
   fdbg("%s\n", __func__);
+  if (st->ro) return -EACCES;
   int res = SPFS_remove(st->fs, name+1);
   if (res < 0) return -EIO;
   return 0;
@@ -177,6 +184,7 @@ static int fuse_spfs_flush(const char *path, struct fuse_file_info *fi) {
 
 static int fuse_spfs_truncate(const char *path, off_t offset) {
   fdbg("%s path:%s offs:%d\n", __func__, path, offset);
+  if (st->ro) return -EACCES;
   int res = SPFS_truncate(st->fs, path+1, offset);
   if (res < 0) return -EIO;
   return 0;
@@ -184,12 +192,13 @@ static int fuse_spfs_truncate(const char *path, off_t offset) {
 
 static int fuse_spfs_ftruncate(const char *path, off_t offset, struct fuse_file_info *fi) {
   fdbg("%s fh:%d\n", __func__, fi->fh);
+  if (st->ro) return -EACCES;
   int res = SPFS_ftruncate(st->fs, fi->fh, offset);
   if (res < 0) return -EIO;
   return 0;
 }
 
-static int fuse_spfs_fsyncdir(const char *path, int what, struct fuse_file_info *fi) {
+static int fuse_spfs_fsyncdir(const char *path, int isdatasync, struct fuse_file_info *fi) {
   printf("fuse spfs fsyncdir %s\n", path);
   return 0;
 }
@@ -267,6 +276,7 @@ static int spfs_hal_read(spfs_t *lfs, uint32_t addr, uint8_t *buf, uint32_t size
 }
 
 static int spfs_hal_write(spfs_t *lfs, uint32_t addr, const uint8_t *buf, uint32_t size, uint32_t flags) {
+  if (st->ro) return -EACCES;
   uint8_t *dst = &((st_t *)lfs->user)->img[addr];
   while (size--) {
     *dst++ &= *buf++;
@@ -275,6 +285,7 @@ static int spfs_hal_write(spfs_t *lfs, uint32_t addr, const uint8_t *buf, uint32
 }
 
 static int spfs_hal_erase(spfs_t *lfs, uint32_t addr, uint32_t size, uint32_t flags) {
+  if (st->ro) return -EACCES;
   memset(&((st_t *)lfs->user)->img[addr], 0xff, size);
   return 0;
 }
@@ -295,10 +306,12 @@ int main(int argc, char *argv[]) {
       (SPFS_VERSION >> 12), (SPFS_VERSION >> 8) & 0xf, SPFS_VERSION & 0xff);
   if (argc < 2) {
     printf("Mounts a spfs image to a folder using fuse.\n");
-    printf("usage:\n%s <image file> <mount path> (fuse params)\n", argv[0]);
+    printf("usage:\n%s <image file> (--read_only) <mount path> (fuse params)\n", argv[0]);
     return 1;
   }
 
+  uint8_t nxt_arg = 1;
+  uint8_t ro = 0;
   st = malloc(sizeof(st_t));
   if (st == NULL) {
     fdbg("Out of memory\n");
@@ -307,7 +320,11 @@ int main(int argc, char *argv[]) {
   memset(st, 0, sizeof(st_t));
   st->fs = &st->_fs;
 
-  st->img_fd = open(argv[1], O_RDWR);
+  if (strcmp("--read-only", argv[2])==0) {
+    ro = 1;
+    nxt_arg = 2;
+  }
+  st->img_fd = open(argv[1], ro ? O_RDONLY : O_RDWR);
   if (st->img_fd < 0) {
     perror("Cannot open file");
     exit(EXIT_FAILURE);
@@ -316,7 +333,7 @@ int main(int argc, char *argv[]) {
   st->img_sz = lseek(st->img_fd, 0, SEEK_END);
   lseek(st->img_fd, 0, SEEK_SET);
 
-  st->img = mmap(0, st->img_sz, PROT_READ | PROT_WRITE, MAP_SHARED, st->img_fd, 0);
+  st->img = mmap(0, st->img_sz, PROT_READ | (ro ? 0 : PROT_WRITE), MAP_SHARED, st->img_fd, 0);
   if (st->img == MAP_FAILED) {
     cleanup(st);
     perror("Cannot map file");
@@ -325,6 +342,7 @@ int main(int argc, char *argv[]) {
 
   st->fs->user = st;
   st->spfs_mutex = spfs_lock_get_mutex();
+  st->ro = ro;
 
   spfs_cfg_t fscfg;
   fscfg.malloc = spfs_alloc;
@@ -350,11 +368,13 @@ int main(int argc, char *argv[]) {
     printf("Cannot mount file system in %s: %s\n", argv[1], spfs_strerror(res));
     exit(EXIT_FAILURE);
   }
-  printf("spfs file system mounted\nsize:%dkB, log block size:%dkB, log page size:%d bytes\n",
+
+  printf("spfs file system mounted%s\nsize:%dkB, log block size:%dkB, log page size:%d bytes\n",
+      ro ? " read-only":"",
       SPFS_CFG_LBLK_SZ(st->fs) * SPFS_LBLK_CNT(st->fs) / 1024, SPFS_CFG_LBLK_SZ(st->fs) / 1024, SPFS_CFG_LPAGE_SZ(st->fs));
   printf("used:%d free:%d\n",
       st->fs->run.pused * SPFS_CFG_LPAGE_SZ(st->fs),
       (st->fs->run.pfree+st->fs->run.pdele) * SPFS_CFG_LPAGE_SZ(st->fs));
 
-  return fuse_main(argc-1, &argv[1], &spfs_operations, st);
+  return fuse_main(argc-nxt_arg, &argv[nxt_arg], &spfs_operations, st);
 }
