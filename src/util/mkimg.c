@@ -224,7 +224,7 @@ int main(int argc, char **argv) {
       spfs_fd_t *spfs_fd;
       _fd_claim(fs, &spfs_fd);
       res = spfs_file_create(fs, spfs_fd, de->d_name);
-      spfs_fd->fd_oflags |= SPFS_O_SENSITIVE;
+      spfs_fd->fd_oflags |= SPFS_O_SENS  ;
       if (res) ERREND("create fail:%d %s\n", res, spfs_strerror(res));
 
       fd = open(fpath, O_RDONLY);

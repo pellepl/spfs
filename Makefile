@@ -1,11 +1,19 @@
 # spfs makefile
 #
+# Targets:
+# all:        builds test and all utils (mount is built if fuse is installed)
+# test:       builds and runs all tests, recommended to have GCOV=y
+# calculator: spfs configuration calculator
+# mkimg:      spfs image creator
+# unpdump:    spfs log image extractor tool
+# mount:      mounts a spfs image to a directory (libfuse-dev required)
+#
 # MONOLITH=y will build a monolith
 # GCOV=y to enable coverage analysis
 # GCOV=f to enable coverage analysis and get coverage output
 # ADDR-SANI=y to enable address sanitizer analysis
 # DBG=y to enable loads of debug output
-#
+# 
 
 .DEFAULT_GOAL := all
 
@@ -26,7 +34,7 @@ V ?= @
 ADDR-SANI ?=
 DBG ?=
 
-HAVE_FUSE = $(shell pkg-config fuse; echo $$?)
+HAVE_FUSE = $(shell pkg-config fuse && echo yes)
 
 TARGET-CALCULATOR = .calculator
 TARGET-MKIMG = .mkimg
@@ -165,8 +173,8 @@ $(DEPFILES) : $(builddir)/%.d:%.c
 .mkdirs:
 	-$(V)$(MKDIR) $(builddir)
 
-ALL = calculator mkimg unpdump
-ifeq ($(HAVE_FUSE),0)
+ALL = $(builddir)/$(binary) calculator mkimg unpdump
+ifeq ($(HAVE_FUSE),yes)
 ALL += mount
 endif
 
@@ -241,10 +249,9 @@ $(TARGET-UNPDUMP): $(builddir)/$(binary)
 
 mount:
 	$(V)echo "UTIL\t$@"
-	$(V)pkg-config fuse || (echo "libfuse-dev must be installed")
+	$(V)pkg-config fuse || (echo "ERROR: missing dependency, libfuse-dev must be installed" && exit 1)
 	$(V)$(MAKE) $(TARGET-MOUNT) FLAGS="\
 	-DSPFS_UTIL=1 \
-	-D_FILE_OFFSET_BITS=64 \
 	`pkg-config fuse --cflags` \
 	"
 $(TARGET-MOUNT): $(builddir)/$(binary)

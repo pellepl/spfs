@@ -118,16 +118,40 @@ static int _write(void *wfs, int fh, const void *buf, uint32_t sz) {
 static int _truncate(void *wfs, const char *path, uint32_t sz){
   char _path[MAX_PATH_LEN];
   snprintf(_path, MAX_PATH_LEN, "%s/%s", (char *)wfs, path);
+  struct stat s;
+  int res = stat(_path, &s);
+  if (res) return -1;
+  // emulate spfs behaviour, clamp trunc beyond end
+  if (sz > s.st_size) sz = s.st_size;
   return truncate(_path, sz);
 }
 static int _ftruncate(void *wfs, int fh, uint32_t sz){
+  struct stat s;
+  int res = fstat(fh, &s);
+  if (res) return -1;
+  // emulate spfs behaviour, clamp trunc beyond end
+  if (sz > s.st_size) sz = s.st_size;
   return ftruncate(fh, sz);
 }
 static int _close(void *wfs, int fh){
   return close(fh);
 }
 static int _lseek(void *wfs, int fh, int offs, int whence){
-  return lseek(fh, offs, whence);
+  struct stat s;
+  int res = fstat(fh, &s);
+  if (res) return -1;
+  int pos = lseek(fh, 0, SEEK_CUR);
+  switch (whence) {
+  case SEEK_CUR: pos += offs; break;
+  case SEEK_SET: pos = offs; break;
+  case SEEK_END: pos = s.st_size + offs; break;
+  }
+  if (pos > s.st_size) {
+    // emulate spfs behaviour, clamp seeking beyond end
+    return lseek(fh, 0, SEEK_END);
+  } else {
+    return lseek(fh, offs, whence);
+  }
 }
 static int _ftell(void *wfs, int fh){
   return lseek(fh, 0, SEEK_CUR );

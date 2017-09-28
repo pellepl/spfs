@@ -335,7 +335,7 @@ int main(int argc, char **argv) {
   _dump_file(fs, fd, 0, fd->fi.size);
 
   printf("\n\nwrite sensitive\n\n");
-  fd->fd_oflags = SPFS_O_SENSITIVE;
+  fd->fd_oflags = SPFS_O_SENS  ;
   res = spfs_file_write(fs, fd, 200, 10000, buf);
   printf("%d\n", res);
   if (res < 0) goto end;
@@ -344,7 +344,7 @@ int main(int argc, char **argv) {
   uint8_t buf2[500];
   memset(buf2, 0xf0, 500);
   printf("\n\nrewrite\n\n");
-  fd->fd_oflags = SPFS_O_REWRITE;
+  fd->fd_oflags = SPFS_O_REWR;
   res = spfs_file_write(fs, fd, 500, 500, buf2);
   printf("%d\n", res);
   if (res < 0) goto end;

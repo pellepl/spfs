@@ -44,7 +44,37 @@ typedef struct {
 static st_t _st;
 static st_t *st = &_st;
 
-
+static int err_spfs2posix(int err) {
+  switch (err) {
+  case SPFS_OK:
+    return 0;
+  case -SPFS_ERR_ARG:
+  case -SPFS_ERR_UNCONFIGURED:
+  case -SPFS_ERR_CFG_SZ_NOT_REPR:
+  case -SPFS_ERR_CFG_SZ_NOT_ALIGNED:
+  case -SPFS_ERR_CFG_LPAGE_SZ:
+  case -SPFS_ERR_CFG_MEM_NOT_ALIGNED:
+  case -SPFS_ERR_CFG_MEM_SZ:
+  case -SPFS_ERR_CFG_MOUNT_MISMATCH:
+    return -EINVAL;
+  case -SPFS_ERR_OUT_OF_PAGES:
+    return -ENOSPC;
+  case -SPFS_ERR_FILE_NOT_FOUND:
+    return -ENOENT;
+  case -SPFS_ERR_OUT_OF_FILEDESCRIPTORS:
+    return -EMFILE;
+  case -SPFS_ERR_BAD_FILEDESCRIPTOR:
+  case -SPFS_ERR_FILE_CLOSED:
+    return -EBADFD;
+  case -SPFS_ERR_NAME_CONFLICT:
+    return -EEXIST;
+  case -SPFS_ERR_NOT_READABLE:
+  case -SPFS_ERR_NOT_WRITABLE:
+    return -EACCES;
+  default:
+    return -EIO;
+  }
+}
 
 static void cleanup(st_t *tst) {
   int i;
@@ -68,7 +98,7 @@ static void fuse_spfs_destroy(void *private_data) {
 
 static int fuse_spfs_getattr(const char *path, struct stat *stbuf) {
   fdbg("%s\n", __func__);
-  int res = 0;
+  int res = SPFS_OK;
   memset(stbuf, 0, sizeof(struct stat));
   if (strcmp(path, "/") == 0) {
     stbuf->st_mode = S_IFDIR | 0755;
@@ -80,11 +110,10 @@ static int fuse_spfs_getattr(const char *path, struct stat *stbuf) {
       stbuf->st_mode = S_IFREG | (st->ro ? 0440 : 0640);
       stbuf->st_nlink = 1;
       stbuf->st_size = buf.size;
-    } else {
-      res = -ENOENT;
     }
   }
-  return res;
+  return err_spfs2posix(res);
+;
 }
 
 static int fuse_spfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
@@ -115,7 +144,7 @@ static int fuse_spfs_open(const char *path, struct fuse_file_info *fi) {
   else if ((fi->flags & O_ACCMODE) == O_WRONLY) oflags = SPFS_O_WRONLY;
   else if ((fi->flags & O_ACCMODE) == O_RDWR) oflags = SPFS_O_RDWR;
   int fh = SPFS_open(st->fs, path+1, oflags, 0);
-  if (fh < 0) return -ENOENT;
+  if (fh < 0) return err_spfs2posix(fh);
   fi->fh = fh;
   return 0;
 }
@@ -124,22 +153,21 @@ static int fuse_spfs_read(const char *path, char *buf, size_t size, off_t offset
   fdbg("%s\n", __func__);
   int res;
   res = SPFS_lseek(st->fs, fi->fh, offset, SPFS_SEEK_SET);
-  if (res < 0) return -EIO;
+  if (res < 0) return err_spfs2posix(res);
   res = SPFS_read(st->fs, fi->fh, (uint8_t *)buf, size);
-  if (res < 0) return -EIO;
+  if (res < 0) return err_spfs2posix(res);
   return res;
 }
 
 static int fuse_spfs_write(const char *name, const char *buf, size_t size, off_t offset,
         struct fuse_file_info *fi) {
   fdbg("%s %s fh:%d offs:%d size:%d\n", __func__, name, fi->fh, offset, size);
-  if (st->ro) return -EACCES;
+  if (st->ro) return -EROFS;
   int res;
   res = SPFS_lseek(st->fs, fi->fh, offset, SPFS_SEEK_SET);
-  if (res < 0) return -EIO;
+  if (res < 0) return err_spfs2posix(res);
   res = SPFS_write(st->fs, fi->fh, (const uint8_t *)buf, size);
-  if (res < 0) return -EIO;
-
+  if (res < 0) return err_spfs2posix(res);
   return res;
 }
 
@@ -147,8 +175,7 @@ static int fuse_spfs_write(const char *name, const char *buf, size_t size, off_t
 static int fuse_spfs_release(const char *path, struct fuse_file_info *fi) {
   fdbg("%s fh:%d\n", __func__, fi->fh);
   int res = SPFS_close(st->fs, fi->fh);
-  if (res < 0) return -EIO;
-  return res;
+  return err_spfs2posix(res);
 }
 
 static int fuse_spfs_fsync(const char *name, int isdatadir, struct fuse_file_info *fsync) {
@@ -158,9 +185,9 @@ static int fuse_spfs_fsync(const char *name, int isdatadir, struct fuse_file_inf
 
 static int fuse_spfs_create(const char *name, mode_t mode, struct fuse_file_info *fi) {
   fdbg("%s %s\n", __func__, name);
-  if (st->ro) return -EACCES;
-  int res = SPFS_create(st->fs, name+1);
-  if (res < 0) return -EIO;
+  if (st->ro) return -EROFS;
+  int res = SPFS_creat(st->fs, name+1);
+  if (res < 0) return err_spfs2posix(res);
   fi->fh = res;
   return 0;
 }
@@ -171,10 +198,9 @@ static int fuse_spfs_access(const char *name, int mode) {
 }
 static int fuse_spfs_unlink(const char *name) {
   fdbg("%s\n", __func__);
-  if (st->ro) return -EACCES;
+  if (st->ro) return -EROFS;
   int res = SPFS_remove(st->fs, name+1);
-  if (res < 0) return -EIO;
-  return 0;
+  return err_spfs2posix(res);
 }
 
 static int fuse_spfs_flush(const char *path, struct fuse_file_info *fi) {
@@ -184,18 +210,16 @@ static int fuse_spfs_flush(const char *path, struct fuse_file_info *fi) {
 
 static int fuse_spfs_truncate(const char *path, off_t offset) {
   fdbg("%s path:%s offs:%d\n", __func__, path, offset);
-  if (st->ro) return -EACCES;
+  if (st->ro) return -EROFS;
   int res = SPFS_truncate(st->fs, path+1, offset);
-  if (res < 0) return -EIO;
-  return 0;
+  return err_spfs2posix(res);
 }
 
 static int fuse_spfs_ftruncate(const char *path, off_t offset, struct fuse_file_info *fi) {
   fdbg("%s fh:%d\n", __func__, fi->fh);
-  if (st->ro) return -EACCES;
+  if (st->ro) return -EROFS;
   int res = SPFS_ftruncate(st->fs, fi->fh, offset);
-  if (res < 0) return -EIO;
-  return 0;
+  return err_spfs2posix(res);
 }
 
 static int fuse_spfs_fsyncdir(const char *path, int isdatasync, struct fuse_file_info *fi) {

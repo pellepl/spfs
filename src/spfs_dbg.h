@@ -224,11 +224,11 @@
   } while(0)
 
 // print, unlock, and return if error
-#define ERRUNLOCK(_x) do { \
+#define ERRUNLOCK(_fs, _x) do { \
     int ___res = (_x); \
     if (___res) { \
       SPFS_ERRMSG(___res); \
-      SPFS_UNLOCK(fs); \
+      SPFS_UNLOCK(_fs); \
       return ___res; \
     } \
   } while(0)

@@ -255,6 +255,7 @@ static int _file_mknod(spfs_t *fs, const char *name, uint8_t type, uint32_t x_sz
   res = spfs_page_ixhdr_write(fs, free_dpix, &ixphdr, SPFS_C_UP);
   ERR(res);
   if (fd) {
+    fd->offset = 0;
     fd->dpix_ixhdr = free_dpix;
     spfs_memcpy(&fd->fi, &ixphdr.fi, sizeof(spfs_fi_t));
   }
@@ -481,7 +482,7 @@ static int _file_write_vix(spfs_t *fs, uint8_t final, int respre,
 
   if (info->ixspix == (spix_t)-1) return SPFS_OK; // no ix loaded
 
-  if (info->v_flags & SPFS_O_REWRITE) return SPFS_OK; // do not touch the inidices
+  if (info->v_flags & SPFS_O_REWR) return SPFS_OK; // do not touch the inidices
 
   // if this is a constructed index, it is totally new and have
   // no data page yet
@@ -614,10 +615,10 @@ static int _file_write_v(spfs_t *fs, pix_t dpix,
 
   spfs_phdr_t phdr = {.id = info->fi->id, .span = SPFS_OFFS2SPIX(fs, info->offset), .p_flags = ~0};
 #if SPFS_CFG_SENSITIVE_DATA
-  if (info->v_flags & SPFS_O_SENSITIVE) phdr.p_flags &= ~SPFS_PHDR_FL_ZER;
+  if (info->v_flags & SPFS_O_SENS  ) phdr.p_flags &= ~SPFS_PHDR_FL_ZER;
 #endif
 
-  if (info->v_flags & SPFS_O_REWRITE) {
+  if (info->v_flags & SPFS_O_REWR) {
 
     // *** this is a rewrite of existing page
 
@@ -627,7 +628,7 @@ static int _file_write_v(spfs_t *fs, pix_t dpix,
         SPFS_T_DATA | SPFS_C_UP | _SPFS_HAL_WR_FL_OVERWRITE | _SPFS_HAL_WR_FL_IGNORE_BITS);
     ERR(res);
 #if SPFS_CFG_SENSITIVE_DATA
-    if (info->v_flags & SPFS_O_SENSITIVE) {
+    if (info->v_flags & SPFS_O_SENS  ) {
       res = spfs_page_hdr_write(fs, dpix, &phdr, SPFS_C_UP | _SPFS_HAL_WR_FL_OVERWRITE);
       ERR(res);
     }
@@ -676,7 +677,7 @@ static int _file_write_v(spfs_t *fs, pix_t dpix,
             arg->src, info->len, SPFS_T_DATA | SPFS_C_UP);
         ERR(res);
 #if SPFS_CFG_SENSITIVE_DATA
-        if (info->v_flags & SPFS_O_SENSITIVE) {
+        if (info->v_flags & SPFS_O_SENS  ) {
           res = spfs_page_hdr_write(fs, dpix, &phdr, SPFS_C_UP | _SPFS_HAL_WR_FL_OVERWRITE);
           ERR(res);
         }
@@ -755,7 +756,7 @@ _SPFS_STATIC int spfs_file_write(spfs_t *fs, spfs_fd_t *fd, uint32_t offs, uint3
 //  }
 
   // check if this is a rewrite, cap it if needed or error
-  if (fd->fd_oflags & SPFS_O_REWRITE) {
+  if (fd->fd_oflags & SPFS_O_REWR) {
     if (fd->fi.size == SPFS_FILESZ_UNDEF || offs >= fd->fi.size) {
       ERR(-SPFS_ERR_EOF);
     }

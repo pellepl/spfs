@@ -97,6 +97,10 @@
 #define SPFS_ERR_NAME_CONFLICT          (SPFS_ERR_BASE+24)
 /** getting an unreserved reserved free page */
 #define SPFS_ERR_FREE_PAGE_NOT_RESERVED (SPFS_ERR_BASE+25)
+/** file not readable */
+#define SPFS_ERR_NOT_READABLE           (SPFS_ERR_BASE+26)
+/** file not writable */
+#define SPFS_ERR_NOT_WRITABLE           (SPFS_ERR_BASE+27)
 /** internal usage: do not use this as a base */
 #define _SPFS_ERR_INT                   (SPFS_ERR_BASE+100)
 #if SPFS_TEST
@@ -137,28 +141,26 @@
 #define SPFS_EXCL                     (1<<6)
 #define SPFS_O_EXCL                   SPFS_EXCL
 /**
- * Data written with O_REWRITE will not allocate any new pages for the data.
+ * Data written with O_REWR will not allocate any new pages for the data.
  * Instead, it will simply rewrite existing data with given data. Considering
  * NOR flash, it means this flag can be used to clear bits in already written
  * files without allocating any new space. It will be as a logical AND
  * operation of given data and persisted data.
  * When writing with O_REWRITE, the file cannot grow. Writes must be within
  * existing file boundaries.
- * O_APPEND and O_REWRITE is invalid.
- * Only valid with O_WRONLY or O_RDWR.
+ * O_APPEND and O_REWR is invalid.
  */
-#define SPFS_O_REWRITE              (1<<7)
+#define SPFS_O_REWR                   (1<<7)
 /**
- * Data written with O_SENSITIVE will be overwritten with zeroes when deleted.
+ * Data written with O_SENS will be overwritten with zeroes when deleted.
  * Technically, any page having any sensitive bytes in it will be overwritten
  * with zeroes when deleted.
  * This is not to be used alone for safe data. Encryption must also be a part
  * of it.
  * This is more to avoid providing statistics on encrypted data to a
  * malicious attacker.
- * Only valid with O_WRONLY or O_RDWR.
  */
-#define SPFS_O_SENSITIVE            (1<<8)
+#define SPFS_O_SENS                 (1<<8)
 
 
 #define SPFS_SEEK_SET               (0)
@@ -374,7 +376,7 @@ typedef struct spfs_dir {
 
 int SPFS_stat(spfs_t *fs, const char *path, struct spfs_stat *buf);
 spfs_file_t SPFS_open(spfs_t *fs, const char *name, int oflags, int mode);
-spfs_file_t SPFS_create(spfs_t *fs, const char *name);
+spfs_file_t SPFS_creat(spfs_t *fs, const char *name);
 int SPFS_read(spfs_t *fs, spfs_file_t fh, void *buf, uint32_t len);
 int SPFS_write(spfs_t *fs, spfs_file_t fh, const void *buf, uint32_t len);
 int SPFS_close(spfs_t *fs, spfs_file_t fh);

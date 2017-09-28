@@ -16,7 +16,8 @@ typedef struct torment_session {
   void *_priv;
 } torment_session_t;
 
-int torment_create_session(uint32_t seed, torment_session_t *sess, cfs_t *cfs);
+int torment_create_session(uint32_t seed, torment_session_t *sess, cfs_t *cfs,
+                           uint32_t max_fds, uint32_t max_files, uint32_t max_file_size);
 int torment_step(torment_session_t *sess);
 int torment_run(torment_session_t *sess);
 void torment_cleanup_session(torment_session_t *sess);
