@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include "spfs_util_common.h"
 
 #define SPFS_TEST                       1
 
@@ -41,10 +42,14 @@
 #define SPFS_DBG_LL_MEDIUM_ER           0
 
 #define SPFS_DBG_USE_ANSI_COLORS        1
+#define SPFS_EXPORT                     1
+#define SPFS_DUMP                       1
+
+#define SPFS_DUMP_PRINTF(f, ...)        fprintf(__dumpfd, f, ## __VA_ARGS__)
 
 #define BITMANIO_H_WHEREABOUTS          "bitmanio.h"
 
-#include "spfs_util_lock.h"
+#include "spfs_util_common.h"
 #include "test/framework/spif_emul.h"
 
 #endif /* _SPFS_COMPILE_CFG_MKIMG_H_ */

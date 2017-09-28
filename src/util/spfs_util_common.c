@@ -1,14 +1,17 @@
 /*
- * spfs_util_lock.c
+ * spfs_util_common.c
  *
  *  Created on: Sep 27, 2017
  *      Author: petera
  */
 
-#include "spfs_util_lock.h"
+#include "spfs_util_common.h"
+
 #include "spfs.h"
 #include <pthread.h>
+#include <stdio.h>
 
+FILE *__dumpfd = NULL;
 pthread_mutex_t spfs_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void *spfs_lock_get_mutex(void) {

@@ -22,6 +22,9 @@
 #include <pthread.h>
 #include <errno.h>
 #include <signal.h>
+#include <linux/memfd.h>
+#include <sys/syscall.h>
+
 #include "spfs.h"
 #include "spfs_lowlevel.h"
 #include "spfs_file.h"
@@ -29,6 +32,11 @@
 #include "spfs_dbg.h"
 
 #define fdbg(f, ...)
+
+#define FILE_DBG_EXPORT ".spfs.dbg.export"
+#define FILE_DBG_DUMP   ".spfs.dbg.dump"
+#define FH_DBG_EXPORT   9999123
+#define FH_DBG_DUMP     9999321
 
 typedef struct {
   spfs_t _fs;
@@ -39,10 +47,47 @@ typedef struct {
   uint32_t img_sz;
   pthread_mutex_t *spfs_mutex;
   uint8_t ro;
+  int memfd;
 } st_t;
 
 static st_t _st;
 static st_t *st = &_st;
+
+static int sys_memfd_create(const char *name)
+{
+  return syscall(__NR_memfd_create, name,  0);
+}
+
+#if SPFS_DUMP
+static int _get_dump_size(spfs_t *fs) {
+  ftruncate(st->memfd, 0);
+  spfs_dump(fs, 0);
+  fflush(__dumpfd);
+  return lseek(st->memfd, 0, SEEK_END);
+}
+static void _read_dump(spfs_t *fs, void *dst, uint32_t off, uint32_t sz) {
+  ftruncate(st->memfd, 0);
+  spfs_dump(fs, 0);
+  fflush(__dumpfd);
+  lseek(st->memfd, off, SEEK_SET);
+  read(st->memfd, dst, sz);
+}
+#endif
+#if SPFS_EXPORT
+static int _get_export_size(spfs_t *fs) {
+  ftruncate(st->memfd, 0);
+  spfs_export(fs, 0);
+  fflush(__dumpfd);
+  return lseek(st->memfd, 0, SEEK_END);
+}
+static void _read_export(spfs_t *fs, void *dst, uint32_t off, uint32_t sz) {
+  ftruncate(st->memfd, 0);
+  spfs_export(fs, 0);
+  fflush(__dumpfd);
+  lseek(st->memfd, off, SEEK_SET);
+  read(st->memfd, dst, sz);
+}
+#endif
 
 static int err_spfs2posix(int err) {
   switch (err) {
@@ -103,6 +148,18 @@ static int fuse_spfs_getattr(const char *path, struct stat *stbuf) {
   if (strcmp(path, "/") == 0) {
     stbuf->st_mode = S_IFDIR | 0755;
     stbuf->st_nlink = 2;
+#if SPFS_EXPORT
+  } else if (st->memfd > 0 && strcmp(path, "/"FILE_DBG_EXPORT) == 0) {
+    stbuf->st_mode = S_IFREG | 0440;
+    stbuf->st_nlink = 1;
+    stbuf->st_size = _get_export_size(st->fs);
+#endif
+#if SPFS_DUMP
+  } else if (st->memfd > 0 && strcmp(path, "/"FILE_DBG_DUMP) == 0) {
+    stbuf->st_mode = S_IFREG | 0440;
+    stbuf->st_nlink = 1;
+    stbuf->st_size =  _get_dump_size(st->fs);
+#endif
   } else {
     struct spfs_stat buf;
     res = SPFS_stat(st->fs, path+1, &buf);
@@ -134,11 +191,29 @@ static int fuse_spfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler
   }
   (void)SPFS_closedir(st->fs, &d);
 
+#if SPFS_EXPORT
+  if (st->memfd > 0) filler(buf, FILE_DBG_EXPORT, NULL, 0);
+#endif
+#if SPFS_DUMP
+  if (st->memfd > 0) filler(buf, FILE_DBG_DUMP, NULL, 0);
+#endif
   return 0;
 }
 
 static int fuse_spfs_open(const char *path, struct fuse_file_info *fi) {
   fdbg("%s\n", __func__);
+#if SPFS_DUMP
+  if (strcmp("/"FILE_DBG_DUMP, path)== 0) {
+    fi->fh = FH_DBG_DUMP;
+    return 0;
+  }
+#endif
+#if SPFS_EXPORT
+  if (strcmp("/"FILE_DBG_EXPORT, path)== 0) {
+    fi->fh = FH_DBG_EXPORT;
+    return 0;
+  }
+#endif
   int oflags = 0;
   if ((fi->flags & O_ACCMODE) == O_RDONLY) oflags = SPFS_O_RDONLY;
   else if ((fi->flags & O_ACCMODE) == O_WRONLY) oflags = SPFS_O_WRONLY;
@@ -151,6 +226,18 @@ static int fuse_spfs_open(const char *path, struct fuse_file_info *fi) {
 
 static int fuse_spfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
   fdbg("%s\n", __func__);
+#if SPFS_DUMP
+  if (strcmp("/"FILE_DBG_DUMP, path)== 0 && fi->fh == FH_DBG_DUMP) {
+    _read_dump(st->fs, buf, offset, size);
+    return size;
+  }
+#endif
+#if SPFS_EXPORT
+  if (strcmp("/"FILE_DBG_EXPORT, path)== 0 && fi->fh == FH_DBG_EXPORT) {
+    _read_export(st->fs, buf, offset, size);
+    return size;
+  }
+#endif
   int res;
   res = SPFS_lseek(st->fs, fi->fh, offset, SPFS_SEEK_SET);
   if (res < 0) return err_spfs2posix(res);
@@ -174,6 +261,7 @@ static int fuse_spfs_write(const char *name, const char *buf, size_t size, off_t
 
 static int fuse_spfs_release(const char *path, struct fuse_file_info *fi) {
   fdbg("%s fh:%d\n", __func__, fi->fh);
+  if (fi->fh == FH_DBG_EXPORT || fi->fh == FH_DBG_DUMP) return 0;
   int res = SPFS_close(st->fs, fi->fh);
   return err_spfs2posix(res);
 }
@@ -399,6 +487,11 @@ int main(int argc, char *argv[]) {
   printf("used:%d free:%d\n",
       st->fs->run.pused * SPFS_CFG_LPAGE_SZ(st->fs),
       (st->fs->run.pfree+st->fs->run.pdele) * SPFS_CFG_LPAGE_SZ(st->fs));
+
+  st->memfd = sys_memfd_create("spfs_output");
+  if (st->memfd > 0) {
+    __dumpfd = fdopen(st->memfd, "a+");
+  }
 
   return fuse_main(argc-nxt_arg, &argv[nxt_arg], &spfs_operations, st);
 }
