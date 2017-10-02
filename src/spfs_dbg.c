@@ -452,8 +452,10 @@ int spfs_export(spfs_t *fs, uint32_t flags) {
         if (spfs_signext(phdr.id, SPFS_BITS_ID(fs)) == SPFS_IDFREE) {
           // free page, dump free header only
           outchar(ochk, SPFS_EXPORT_HDR_FREE); // no page delimiter for free pages
-        } else if ((phdr.p_flags & SPFS_PHDR_FL_IDX) == 0 || flags == SPFS_DUMP_EXPORT_ALL) {
-          // index header or full dump, dump all page
+        } else if ((phdr.p_flags & SPFS_PHDR_FL_IDX) == 0 ||
+                   spfs_signext(phdr.id, SPFS_BITS_ID(fs)) == SPFS_IDJOUR ||
+                   flags == SPFS_DUMP_EXPORT_ALL) {
+          // index, journal, or full dump, dump all page
           res = _medium_read(fs, SPFS_LPIX2ADDR(fs, lpix), fs->run.work1, lpgsz-phdrsz, 0);
           ERRGO(res);
           chk = _chksum(fs->run.work1, lpgsz, chk);
