@@ -17,9 +17,9 @@
 
 .DEFAULT_GOAL := all
 
-srcdir = src
-utildir = util
-testdir = test
+srcdir := src
+utildir := util
+testdir := test
 builddir = build
 gcov-report = $(builddir)/gcov-report
 binary = spfs
@@ -68,18 +68,21 @@ ifeq ($(MAKECMDGOALS), $(TARGET-CALCULATOR))
 # calculator
 CFILES := $(CFILES_FS) $(CFILES_CALC) $(CFILES_UTIL_XTRA)
 binary := $(binary)-calc
+targetdir := $(builddir)/calc
 else
   ifeq ($(MAKECMDGOALS), $(TARGET-MKIMG))
 # mkimg
 CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_MKIMG) $(CFILES_UTIL_XTRA)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-mkimg
+targetdir := $(builddir)/mkimg
   else
     ifeq ($(MAKECMDGOALS), $(TARGET-UNPDUMP))
 # unpdump
 CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_UNPDUMP) $(CFILES_UTIL_XTRA)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-unpdump
+targetdir := $(builddir)/unpdump
     else
       ifeq ($(MAKECMDGOALS), $(TARGET-MOUNT))
 # fuse mount
@@ -87,19 +90,21 @@ CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_MOUNT) $(CFILES_UTIL_XTRA)
 FLAGS += -DSPFS_TEST=1
 LIBS += `pkg-config fuse --libs` -lpthread
 binary := $(binary)-mount
+targetdir := $(builddir)/mount
       else
 # default to the test binary
 CFILES := $(CFILES_FS) $(CFILES_TEST_BASE) $(CFILES_TEST)
 FLAGS += -DSPFS_TEST=1
 binary := $(binary)-test
+targetdir := $(builddir)/test
       endif
     endif
   endif
 endif
 
-OBJFILES = $(CFILES:%.c=$(builddir)/%.o)
-OBJFSFILES = $(CFILES_FS:%.c=$(builddir)/%.o)
-DEPFILES = $(CFILES:%.c=$(builddir)/%.d)
+OBJFILES = $(CFILES:%.c=$(targetdir)/%.o)
+OBJFSFILES = $(CFILES_FS:%.c=$(targetdir)/%.o)
+DEPFILES = $(CFILES:%.c=$(targetdir)/%.d)
 
 CFLAGS += \
 -Wall -Wno-format-y2k -W -Wstrict-prototypes -Wmissing-prototypes \
@@ -155,23 +160,23 @@ $(builddir)/$(binary): $(OBJFILES)
 	$(V)@echo "LN\t$@"
 	$(V)$(CC) $(LDFLAGS) -o $@ $(OBJFILES) $(LIBS)
 
-$(OBJFILES) : $(builddir)/%.o:%.c
+$(OBJFILES) : $(targetdir)/%.o:%.c
 	$(V)echo "CC\t$@"
 	$(V)$(MKDIR) $(@D);
 	$(V)$(CC) $(CFLAGS) -g -c -o $@ $<
 
-$(DEPFILES) : $(builddir)/%.d:%.c
+$(DEPFILES) : $(targetdir)/%.d:%.c
 	$(V)echo "DEP\t$@"; \
 	rm -f $@; \
 	$(MKDIR) $(@D); \
 	$(CC) -M $< > $@.$$$$ 2> /dev/null; \
-	sed 's,\($*\)\.o[ :]*, $(builddir)/\1.o $@ : ,g' < $@.$$$$ > $@; \
+	sed 's,\($*\)\.o[ :]*, $(targetdir)/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
 .PHONY: all test clean
 
 .mkdirs:
-	-$(V)$(MKDIR) $(builddir)
+	-$(V)$(MKDIR) $(builddir) $(targetdir)
 
 ALL = $(builddir)/$(binary) calculator mkimg unpdump
 ifeq ($(HAVE_FUSE),yes)
@@ -188,7 +193,7 @@ test: $(builddir)/$(binary)
 ifeq ($(RUN_GCOV),y)
 	$(V)rm -f $(gcov-report)
 	$(V)for cfile in $(CFILES_FS); do \
-		gcov $(GCOV_SWITCHES) -o $(builddir)/$(srcdir) $(builddir)/$$cfile >> $(gcov-report); \
+		gcov $(GCOV_SWITCHES) -o $(targetdir)/$(srcdir) $(targetdir)/$$cfile >> $(gcov-report); \
 	done
 	$(V)awk -v GCOV_FILES="$(GCOV_FILES)" \
 	     -v GCOV_ANNOTATION="$(GCOV_ANNOTATION)" \

@@ -1,0 +1,9 @@
+0.4.0
+Lowlevel, GC when needed
+Rename func
+Rename func, in fuse
+Reserve correct number of pages before altering index pages 
+Make journalling work
+Rotating files?
+Extra header info, number of blocks
+Config option, no blind writes
