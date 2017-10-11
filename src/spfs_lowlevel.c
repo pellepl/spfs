@@ -29,6 +29,7 @@
 // where x : [1,3,5,7,9,11,13,15]
 //       y : 2^(y+6)
 // (2*x+1)*2^(y+6)
+// packs a 32-bit to an 8-bit
 _SPFS_STATIC uint8_t spfs_packnum(uint32_t x) {
   x >>= 6;
   if (x == 0) return 0;
@@ -38,10 +39,12 @@ _SPFS_STATIC uint8_t spfs_packnum(uint32_t x) {
   return (((x >> (lg2) & 0xf)/2) << 5) | lg2;
 }
 
+// unpacks an 8-bit to a 32-bit
 _SPFS_STATIC uint32_t spfs_unpacknum(uint8_t x) {
   return (uint32_t)((2*(x >> 5)+1) * (1 << ((x & 0x1f) + 6)));
 }
 
+// calculates checksum for data block
 _SPFS_STATIC uint16_t _chksum(const uint8_t *data, uint32_t len, uint16_t init_checksum) {
   uint16_t chk = init_checksum;
   uint16_t i;
@@ -52,8 +55,12 @@ _SPFS_STATIC uint16_t _chksum(const uint8_t *data, uint32_t len, uint16_t init_c
   return chk;
 }
 
+// calculates checksum for given block header
+// ignore_gc_state will make checksum unaffected regardless what
+// the gc state byte is set to in block header
 _SPFS_STATIC uint16_t spfs_bhdr_chksum(uint8_t *bhdr, uint8_t ignore_gc_state) {
   uint8_t gc_flag = bhdr[8];
+  bhdr[8] |=  (ignore_gc_state ? SPFS_BLK_GC_INACTIVE : 0);
   uint16_t chk = _chksum(bhdr, SPFS_BLK_HDR_SZ-2, 0);
   bhdr[8] = gc_flag;
   return chk;
@@ -80,6 +87,7 @@ _SPFS_STATIC pix_t _dpix2lpix(spfs_t *fs, pix_t dpix) {
 
 
 #define ERA_MSB_MASK (1 << (sizeof(uint16_t)*8-1))
+// returns highest erase count, takes care of wrapping
 _SPFS_STATIC uint16_t _era_cnt_max(uint16_t a, uint16_t b) {
   if ((a & ERA_MSB_MASK) == (b & ERA_MSB_MASK)) {
     // a=1,b=2 or a=0xfffc,b=0xfffd
@@ -92,6 +100,7 @@ _SPFS_STATIC uint16_t _era_cnt_max(uint16_t a, uint16_t b) {
     return a;
   }
 }
+// returns erase count difference, big-small, takes care of wrapping
 _SPFS_STATIC uint16_t _era_cnt_diff(uint16_t big, uint16_t small) {
   if (big >= small) {
     return big-small;
@@ -104,7 +113,7 @@ _SPFS_STATIC uint16_t _era_cnt_diff(uint16_t big, uint16_t small) {
 // medium / hal access
 ///////////////////////////////////////////////////////////////////////////////
 
-
+// erase a block on medium
 _SPFS_STATIC int _medium_erase(spfs_t *fs, uint32_t addr, uint32_t len, uint32_t er_flags) {
 #if SPFS_DBG_LL_MEDIUM_ER
   if (fs) {
@@ -122,7 +131,7 @@ _SPFS_STATIC int _medium_erase(spfs_t *fs, uint32_t addr, uint32_t len, uint32_t
   ERRET(res);
 }
 
-
+// writes data to medium
 _SPFS_STATIC int _medium_write(spfs_t *fs, uint32_t addr, const uint8_t *src, uint32_t len, uint32_t wr_flags) {
 #if SPFS_DBG_LL_MEDIUM_WR
   if (fs) {
@@ -143,6 +152,7 @@ _SPFS_STATIC int _medium_write(spfs_t *fs, uint32_t addr, const uint8_t *src, ui
   ERRET(res);
 }
 
+// reads data from medium
 _SPFS_STATIC int _medium_read(spfs_t *fs, uint32_t addr, uint8_t *dst, uint32_t len, uint32_t rd_flags) {
 #if SPFS_DBG_LL_MEDIUM_RD
   if (fs) {
@@ -166,6 +176,7 @@ _SPFS_STATIC int _medium_read(spfs_t *fs, uint32_t addr, uint8_t *dst, uint32_t 
 ///////////////////////////////////////////////////////////////////////////////
 
 
+// writes a blockheader with given erase count and whether gc is active or not
 _SPFS_STATIC int _bhdr_write(spfs_t *fs, bix_t lbix, bix_t dbix, uint16_t era,
                              uint8_t gc_active, uint32_t wr_flags) {
   uint8_t bhdr[SPFS_BLK_HDR_SZ];
@@ -191,6 +202,9 @@ _SPFS_STATIC int _bhdr_write(spfs_t *fs, bix_t lbix, bix_t dbix, uint16_t era,
   ERRET(res);
 }
 
+// parses a blockheader from memory to struct
+// ignore_gc_state will make checksum unaffected regardless what
+// the gc state byte is set to in block header
 _SPFS_STATIC void spfs_bhdr_parse(spfs_bhdr_t *b, uint8_t *bhdr, uint8_t ignore_gc_state) {
   b->magic = spfs_mrd16(bhdr, 0);
   b->dbix = spfs_mrd16(bhdr, 2);
@@ -202,6 +216,7 @@ _SPFS_STATIC void spfs_bhdr_parse(spfs_bhdr_t *b, uint8_t *bhdr, uint8_t ignore_
   b->lchk = spfs_bhdr_chksum(bhdr, ignore_gc_state);
 }
 
+// reads block header to memory, and parses it to given struct
 _SPFS_STATIC int _bhdr_rd(spfs_t *fs, bix_t lbix, spfs_bhdr_t *bhdr, uint8_t raw[SPFS_BLK_HDR_SZ]) {
   int res = _medium_read(fs, SPFS_LBLK2ADDR(fs, lbix), raw, SPFS_BLK_HDR_SZ, 0);
   ERR(res);
@@ -209,6 +224,7 @@ _SPFS_STATIC int _bhdr_rd(spfs_t *fs, bix_t lbix, spfs_bhdr_t *bhdr, uint8_t raw
   return res;
 }
 
+// erases a block and writes the block header
 _SPFS_STATIC int _block_erase(spfs_t *fs, bix_t lbix, bix_t dbix, uint16_t era) {
   dbg("erase lbix:"_SPIPRIbl" dbix:"_SPIPRIbl"\n", lbix, dbix);
   fs->run.max_era_cnt = _era_cnt_max(era, fs->run.max_era_cnt);
@@ -224,7 +240,7 @@ _SPFS_STATIC int _block_erase(spfs_t *fs, bix_t lbix, bix_t dbix, uint16_t era) 
 // LU operations
 ///////////////////////////////////////////////////////////////////////////////
 
-
+// writes an entry to ta LU page for corresponding logical page index
 _SPFS_STATIC int _lu_write_lpix(spfs_t *fs, pix_t lpix, uint32_t value, uint32_t wr_flags) {
   dbg("%s lpix:"_SPIPRIpg" val:"_SPIPRIid" (id:"_SPIPRIid" fl:"_SPIPRIfl")\n",
       value >> SPFS_LU_FLAG_BITS ? "SET" : "DEL",
@@ -255,10 +271,12 @@ _SPFS_STATIC int _lu_write_lpix(spfs_t *fs, pix_t lpix, uint32_t value, uint32_t
                         (_SPFS_HAL_WR_FL_OVERWRITE | _SPFS_HAL_WR_FL_IGNORE_BITS));
 }
 
+// writes an entry to ta LU page for corresponding data page index
 static int _lu_write_dpix(spfs_t *fs, pix_t dpix, uint32_t value, uint32_t wr_flags) {
   return _lu_write_lpix(fs, _dpix2lpix(fs, dpix), value, wr_flags);
 }
 
+// allocates given data page index in the LU pages with given id
 _SPFS_STATIC int _lu_page_allocate(spfs_t *fs, pix_t dpix, id_t id, uint8_t lu_flags) {
   int res = _lu_write_dpix(fs, dpix, (id << SPFS_LU_FLAG_BITS) | lu_flags,
                            SPFS_C_UP);
@@ -268,6 +286,9 @@ _SPFS_STATIC int _lu_page_allocate(spfs_t *fs, pix_t dpix, id_t id, uint8_t lu_f
   ERRET(res);
 }
 
+// delets given data page index in the LU
+// if sensitive data is enabled, this function checks whether the data page
+// should also be deleted
 _SPFS_STATIC int _lu_page_delete(spfs_t *fs, pix_t dpix) {
   spfs_assert(dpix < (pix_t)SPFS_DPAGES_MAX(fs));
   int res = _lu_write_dpix(fs, dpix, 0, SPFS_C_RM);
@@ -300,6 +321,7 @@ _SPFS_STATIC int _lu_page_delete(spfs_t *fs, pix_t dpix) {
 // page operations
 ///////////////////////////////////////////////////////////////////////////////
 
+// unpacks given page header memory into given struct
 _SPFS_STATIC void _phdr_rdmem(spfs_t *fs, uint8_t *mem, spfs_phdr_t *phdr) {
   bstr8 bs;
   const uint8_t bits_id = SPFS_BITS_ID(fs);
@@ -309,6 +331,7 @@ _SPFS_STATIC void _phdr_rdmem(spfs_t *fs, uint8_t *mem, spfs_phdr_t *phdr) {
   phdr->p_flags= bstr8_rd(&bs, SPFS_PHDR_FLAG_BITS);
 }
 
+// packs given page header struct to given memory
 _SPFS_STATIC void _phdr_wrmem(spfs_t *fs, uint8_t *mem, spfs_phdr_t *phdr) {
   const uint8_t bits_id = SPFS_BITS_ID(fs);
   bstr8 bs;
@@ -318,7 +341,7 @@ _SPFS_STATIC void _phdr_wrmem(spfs_t *fs, uint8_t *mem, spfs_phdr_t *phdr) {
   bstr8_wr(&bs, SPFS_PHDR_FLAG_BITS, phdr->p_flags);
 }
 
-
+// unpacks given page index header memory into given struct, excluding page header
 static void _pixhdr_rdmem(spfs_t *fs, uint8_t *mem, spfs_pixhdr_t *pixhdr) {
   (void)fs;
   bstr8 bs;
@@ -335,6 +358,7 @@ static void _pixhdr_rdmem(spfs_t *fs, uint8_t *mem, spfs_pixhdr_t *pixhdr) {
 #endif
 }
 
+// packs given page index header struct to given memory, excluding page header
 static void _pixhdr_wrmem(spfs_t *fs, uint8_t *mem, spfs_pixhdr_t *pixhdr) {
   (void)fs;
   bstr8 bs;
@@ -351,6 +375,7 @@ static void _pixhdr_wrmem(spfs_t *fs, uint8_t *mem, spfs_pixhdr_t *pixhdr) {
 #endif
 }
 
+// returns file size from given packed page index header memory
 uint32_t _pixhdr_rdmem_sz(spfs_t *fs, uint8_t *mem) {
   (void)fs;
   bstr8 bs;
@@ -358,6 +383,7 @@ uint32_t _pixhdr_rdmem_sz(spfs_t *fs, uint8_t *mem) {
   return bstr8_rd(&bs, 32);
 }
 
+// writes file size in given packed page index header memory
 void _pixhdr_wrmem_sz(spfs_t *fs, uint8_t *mem, uint32_t sz) {
   (void)fs;
   bstr8 bs;
@@ -365,6 +391,7 @@ void _pixhdr_wrmem_sz(spfs_t *fs, uint8_t *mem, uint32_t sz) {
   bstr8_wr(&bs, 32, sz);
 }
 
+// reads page header from medium for given data page index into given struct
 _SPFS_STATIC int _page_hdr_read(spfs_t *fs, pix_t dpix, spfs_phdr_t *phdr, uint32_t rd_flags) {
   int res;
   uint8_t mem[SPFS_PHDR_MAX_SZ];
@@ -376,6 +403,7 @@ _SPFS_STATIC int _page_hdr_read(spfs_t *fs, pix_t dpix, spfs_phdr_t *phdr, uint3
   ERRET(res);
 }
 
+// writes page header to medium for given data page index from given struct
 _SPFS_STATIC int spfs_page_hdr_write(spfs_t *fs, pix_t dpix, spfs_phdr_t *phdr, uint32_t wr_flags) {
   int res;
   uint8_t mem[SPFS_PHDR_MAX_SZ];
@@ -388,6 +416,8 @@ _SPFS_STATIC int spfs_page_hdr_write(spfs_t *fs, pix_t dpix, spfs_phdr_t *phdr, 
   ERRET(res);
 }
 
+// reads page index header from medium for given data page index into given struct,
+// including page header
 _SPFS_STATIC int _page_ixhdr_read(spfs_t *fs, pix_t dpix, spfs_pixhdr_t *pixhdr, uint32_t rd_flags) {
   int res;
   uint8_t mem[SPFS_PIXHDR_MAX_SZ + SPFS_PHDR_MAX_SZ];
@@ -401,6 +431,8 @@ _SPFS_STATIC int _page_ixhdr_read(spfs_t *fs, pix_t dpix, spfs_pixhdr_t *pixhdr,
   ERRET(res);
 }
 
+// writes page index header to medium for given data page index from given struct,
+// including page header
 _SPFS_STATIC int spfs_page_ixhdr_write(spfs_t *fs, pix_t dpix, spfs_pixhdr_t *pixhdr, uint32_t wr_flags) {
   int res;
   uint8_t mem[SPFS_PIXHDR_MAX_SZ + SPFS_PHDR_MAX_SZ];
@@ -414,6 +446,7 @@ _SPFS_STATIC int spfs_page_ixhdr_write(spfs_t *fs, pix_t dpix, spfs_pixhdr_t *pi
   ERRET(res);
 }
 
+// copies a logical page to another logical page
 _SPFS_STATIC int _page_copy(spfs_t *fs, pix_t dst_lpix, pix_t src_lpix, uint8_t only_data) {
   dbg("dstlpix:"_SPIPRIpg" srclpix:"_SPIPRIpg"\n", dst_lpix, src_lpix);
   int res = SPFS_OK;
@@ -665,6 +698,7 @@ static int _page_find_free_v(spfs_t *fs, uint32_t lu_entry, spfs_vis_info_t *inf
   }
   return SPFS_VIS_CONT;
 }
+// finds a free page
 _SPFS_STATIC int _page_find_free(spfs_t *fs, pix_t *dpix) {
   int res = SPFS_OK;
   _page_find_free_varg_t arg;
@@ -678,6 +712,7 @@ _SPFS_STATIC int _page_find_free(spfs_t *fs, pix_t *dpix) {
   return SPFS_OK;
 }
 
+// allocates a free page with given id, returns the data page index in dpix
 _SPFS_STATIC int _page_allocate_free(spfs_t *fs, pix_t *dpix, id_t id, uint8_t lu_flag) {
   spfs_assert(dpix);
   int res = _page_find_free(fs, dpix);
@@ -720,6 +755,7 @@ static int _page_find_v(spfs_t *fs, uint32_t lu_entry, spfs_vis_info_t *info, vo
   }
   return SPFS_VIS_CONT;
 }
+// finds a page with given id and span index, ixhdr or not, returns the data page index in dpix
 _SPFS_STATIC int spfs_page_find(spfs_t *fs, id_t id, spix_t span, uint8_t find_flags, pix_t *dpix) {
   int res = SPFS_OK;
   _page_find_varg_t arg = {.id = id, .span = span, .find_flags = find_flags};
@@ -734,6 +770,9 @@ _SPFS_STATIC int spfs_page_find(spfs_t *fs, id_t id, spix_t span, uint8_t find_f
   return SPFS_OK;
 }
 
+// reserves a free page, returns a handle to reserved page
+// this free page is physically free, but will not be found by find_free
+// as long as it is reserved
 _SPFS_STATIC int _resv_alloc(spfs_t *fs) {
   if (fs->run.pdele + fs->run.pfree - fs->run.resv.ptaken == 0)
     ERR(-SPFS_ERR_OUT_OF_PAGES);
@@ -758,6 +797,8 @@ _SPFS_STATIC int _resv_alloc(spfs_t *fs) {
   return (int)rix;
 }
 
+// unreserves a free page given handle, returns the data page index or error
+// the page is now found by find_free
 _SPFS_STATIC int _resv_free(spfs_t *fs, uint8_t rix) {
   spfs_assert(rix < SPFS_PFREE_RESV);
   int dpix = -SPFS_ERR_FREE_PAGE_NOT_RESERVED;

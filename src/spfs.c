@@ -57,7 +57,7 @@ spfs_file_t SPFS_open(spfs_t *fs, const char *path, int oflags, int mode) {
       oflags & SPFS_O_EXCL   ? " EXCL":"",
       oflags & SPFS_O_DIRECT ? " DIRECT":"",
       oflags & SPFS_O_REWR   ? " REWR":"",
-      oflags & SPFS_O_SENS   ? " SENS":"",
+      oflags & SPFS_O_SENS   ? " SENS":""
           );
   (void)mode;
   SPFS_LOCK(fs);

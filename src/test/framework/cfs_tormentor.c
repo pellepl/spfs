@@ -46,34 +46,6 @@ static void memrnd(priv_t *p, uint8_t *dst, uint32_t len) {
   }
 }
 
-int torment_create_session(uint32_t seed, torment_session_t *sess, cfs_t *cfs,
-                           uint32_t max_fds, uint32_t max_files, uint32_t max_file_size) {
-  priv_t *p = malloc(sizeof(priv_t));
-  if (p == NULL) return ENOMEM;
-  memset(p, 0, sizeof(priv_t));
-  sess->_priv = p;
-  prnd_seed(&p->rnd, seed);
-  p->cfs = cfs;
-  p->honor_remove_when_full = prndrngd(&p->rnd, 0, 1);
-  p->honor_create_when_empty = prndrngd(&p->rnd, 0, 1);
-  p->keep_large_files = prndrngd(&p->rnd, 0, 1);
-  p->keep_small_files = prndrngd(&p->rnd, 0, 1);
-  p->modify_large_files = prndrngd(&p->rnd, 0, 1);
-  p->modify_small_files = prndrngd(&p->rnd, 0, 1);
-  p->max_fds = prndrngi(&p->rnd, 1, max_fds+1);
-  p->max_files = prndrngi(&p->rnd, 1, max_files+1);
-  p->max_file_size = max_file_size;
-
-  p->fds = malloc(p->max_fds*sizeof(int));
-  if (p->fds == NULL) {
-    free(p);
-    return ENOMEM;
-  }
-  memset(p, 0xff, p->max_fds*sizeof(int));
-
-  return 0;
-}
-
 static int fname_register(priv_t *p, const char *fname) {
   char *fe = strdup(fname);
   if (fe == NULL) return -ENOMEM;
@@ -387,6 +359,34 @@ static void _step(priv_t *p) {
   }
 }
 
+
+int torment_create_session(uint32_t seed, torment_session_t *sess, cfs_t *cfs,
+                           uint32_t max_fds, uint32_t max_files, uint32_t max_file_size) {
+  priv_t *p = malloc(sizeof(priv_t));
+  if (p == NULL) return ENOMEM;
+  memset(p, 0, sizeof(priv_t));
+  sess->_priv = p;
+  prnd_seed(&p->rnd, seed);
+  p->cfs = cfs;
+  p->honor_remove_when_full = prndrngd(&p->rnd, 0, 1);
+  p->honor_create_when_empty = prndrngd(&p->rnd, 0, 1);
+  p->keep_large_files = prndrngd(&p->rnd, 0, 1);
+  p->keep_small_files = prndrngd(&p->rnd, 0, 1);
+  p->modify_large_files = prndrngd(&p->rnd, 0, 1);
+  p->modify_small_files = prndrngd(&p->rnd, 0, 1);
+  p->max_fds = prndrngi(&p->rnd, 1, max_fds+1);
+  p->max_files = prndrngi(&p->rnd, 1, max_files+1);
+  p->max_file_size = max_file_size;
+
+  p->fds = malloc(p->max_fds*sizeof(int));
+  if (p->fds == NULL) {
+    free(p);
+    return ENOMEM;
+  }
+  memset(p, 0xff, p->max_fds*sizeof(int));
+
+  return 0;
+}
 
 
 //int torment_step(torment_session_t *sess);

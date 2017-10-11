@@ -628,7 +628,7 @@ static int _file_write_v(spfs_t *fs, pix_t dpix,
         SPFS_T_DATA | SPFS_C_UP | _SPFS_HAL_WR_FL_OVERWRITE | _SPFS_HAL_WR_FL_IGNORE_BITS);
     ERR(res);
 #if SPFS_CFG_SENSITIVE_DATA
-    if (info->v_flags & SPFS_O_SENS  ) {
+    if (info->v_flags & SPFS_O_SENS) {
       res = spfs_page_hdr_write(fs, dpix, &phdr, SPFS_C_UP | _SPFS_HAL_WR_FL_OVERWRITE);
       ERR(res);
     }
@@ -988,4 +988,3 @@ _SPFS_STATIC int spfs_file_truncate(spfs_t *fs, const char *path, uint32_t targe
                         _file_trunc_v, _file_trunc_vix, 0);
   ERRET(res);
 }
-

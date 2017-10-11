@@ -41,7 +41,7 @@ TARGET-MKIMG = .mkimg
 TARGET-UNPDUMP = .unpdump
 TARGET-MOUNT = .mount
 CFILES_BASE := $(wildcard $(srcdir)/*.c)
-CFILES_CALC = $(srcdir)/$(utildir)/calc.c 
+CFILES_CALC = $(srcdir)/$(utildir)/calc.c
 CFILES_MKIMG = $(srcdir)/$(utildir)/mkimg.c
 CFILES_UNPDUMP = $(srcdir)/$(utildir)/unpdump.c
 CFILES_MOUNT = $(srcdir)/$(utildir)/mount.c
@@ -166,8 +166,7 @@ $(OBJFILES) : $(targetdir)/%.o:%.c
 	$(V)$(CC) $(CFLAGS) -g -c -o $@ $<
 
 $(DEPFILES) : $(targetdir)/%.d:%.c
-	$(V)echo "DEP\t$@"; \
-	rm -f $@; \
+	$(V)rm -f $@; \
 	$(MKDIR) $(@D); \
 	$(CC) -M $< > $@.$$$$ 2> /dev/null; \
 	sed 's,\($*\)\.o[ :]*, $(targetdir)/\1.o $@ : ,g' < $@.$$$$ > $@; \
@@ -221,7 +220,7 @@ info:
 
 calculator:
 	$(V)echo "UTIL\t$@"
-	$(V)$(MAKE) $(TARGET-CALCULATOR) FLAGS="\
+	$(V)$(MAKE) $(TARGET-CALCULATOR) -s FLAGS="\
 	-DSPFS_CFG_DYNAMIC=1 \
 	-DSPFS_TEST=0 \
 	-DSPFS_ERRSTR=1 \
@@ -240,14 +239,14 @@ $(TARGET-CALCULATOR): $(builddir)/$(binary)
 
 mkimg:
 	$(V)echo "UTIL\t$@"
-	$(V)$(MAKE) $(TARGET-MKIMG) FLAGS="\
+	$(V)$(MAKE) $(TARGET-MKIMG) -s FLAGS="\
 	-DSPFS_UTIL=1 \
 	"
 $(TARGET-MKIMG): $(builddir)/$(binary)
 
 unpdump:
 	$(V)echo "UTIL\t$@"
-	$(V)$(MAKE) $(TARGET-UNPDUMP) FLAGS="\
+	$(V)$(MAKE) $(TARGET-UNPDUMP) -s FLAGS="\
 	-DSPFS_UTIL=1 \
 	"
 $(TARGET-UNPDUMP): $(builddir)/$(binary)
@@ -255,7 +254,7 @@ $(TARGET-UNPDUMP): $(builddir)/$(binary)
 mount:
 	$(V)echo "UTIL\t$@"
 	$(V)pkg-config fuse || (echo "ERROR: missing dependency, libfuse-dev must be installed" && exit 1)
-	$(V)$(MAKE) $(TARGET-MOUNT) FLAGS="\
+	$(V)$(MAKE) $(TARGET-MOUNT) -s FLAGS="\
 	-DSPFS_UTIL=1 \
 	`pkg-config fuse --cflags` \
 	"

@@ -373,12 +373,14 @@ int main(int argc, char **argv) {
 
 
   end:
-  spfs_gc(fs);
+  res = spfs_gc(fs);
+  if (res) printf("gc err %d\n", res);
 //  spfs_dump(fs, SPFS_DUMP_NO_DELE | SPFS_DUMP_NO_FREE | SPFS_DUMP_PAGE_DATA);
   spfs_dump(fs, SPFS_DUMP_LS);
   //_diff_page_ddata(fs, 2,3);
   spfs_export(fs, SPFS_DUMP_EXPORT_META);
   store_raw_image(fs, "raw.img");
+  printf(">>>1\n");
   fs_free();
   printf("end, res %d %s\n", res, spfs_strerror(res));
 

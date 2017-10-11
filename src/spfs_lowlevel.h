@@ -22,7 +22,10 @@
 #define SPFS_BLK_MAGIC_END        (0x5052)
 #define SPFS_BLK_MAGIC_NONE       (0xffff)
 
+// block header, indicates that gc is not active for this block
 #define SPFS_BLK_GC_INACTIVE      (0x5f)
+// block header, indicates that gc is active for this block
+// active flags must only reset bits wrt inactive flag
 #define SPFS_BLK_GC_ACTIVE        (0x55)
 
 // file system minimum number of logical blocks
@@ -31,7 +34,7 @@
 #define _SPFS_PAGE_CNT_MIN        4
 
 // block header[ 2B:MAGIC 2B:DBIX 2B:ERA_CNT 1B:LBLKSZ 1B:LPAGESZ 1B:GCFLAG 2B:CHK ]
-#define SPFS_BLK_HDR_SZ          (2+2+2+1+1+1+2)
+#define SPFS_BLK_HDR_SZ           (2+2+2+1+1+1+2)
 
 #define SPFS_LU_FLAG_BITS         (1)
 // lu entry is index
@@ -52,15 +55,17 @@
 #define SPFS_PIXHDR_TY_FILE       (0)
 // fixed size file
 #define SPFS_PIXHDR_TY_FIXFILE    (1)
-// fixed size rotating file
+// todo fixed size rotating file
 //#define SPFS_PIXHDR_TY_ROTFILE    (2)
+// todo directory entry
 //#define SPFS_PIXHDR_TY_DIR        (3)
+// todo link entry
 //#define SPFS_PIXHDR_TY_LINK       (4)
 
 #define SPFS_PIXHDR_FLAG_BITS     (2)
-// fixed size rotating file is full, length is now offset
+// todo fixed size rotating file is full, length is now offset
 //#define SPFS_PIXHDR_FL_ROT_FULL   (1<<0)
-// file contains sensitive data
+// todo file contains sensitive data
 //#define SPFS_PIXHDR_FL_SENS       (1<<1)
 
 // needed extra ids: FREE DELE JOUR
@@ -317,17 +322,15 @@
   )
 
 
-
-
-
-
-
+// maximum page header size
 #define SPFS_PHDR_MAX_SZ \
   spfs_ceil(8*sizeof(uint32_t)*2 + SPFS_PHDR_FLAG_BITS, 8)
 
+// actual page header size
 #define SPFS_PHDR_SZ(_fs) \
   spfs_ceil(2 * SPFS_BITS_ID(_fs) + SPFS_PHDR_FLAG_BITS, 8)
 
+// maximum page index header size
 #define SPFS_PIXHDR_MAX_SZ \
   ( spfs_ceil(32 + \
               32 + \
@@ -337,6 +340,7 @@
               , 8) \
     + SPFS_CFG_FILE_META_SZ )
 
+// actual page index header size
 #define SPFS_PIXHDR_SZ(_fs) \
   SPFS_PIXHDR_MAX_SZ
 
@@ -493,12 +497,18 @@ typedef struct {
 // filesystem visitor
 //
 
+// internal visitor return code, keep searching
 #define SPFS_VIS_CONT               (_SPFS_ERR_INT+1)
+// internal visitor return code, reload lu to work buf and keep searching
 #define SPFS_VIS_CONT_LU_RELOAD     (_SPFS_ERR_INT+2)
+// internal visitor return code, stop searching
 #define SPFS_VIS_STOP               (_SPFS_ERR_INT+3)
+// internal visitor return code, reached end
 #define SPFS_ERR_VIS_END            (_SPFS_ERR_INT+4)
+// internal return code, assert
 #define SPFS_ERR_ASSERT             (_SPFS_ERR_INT+5)
 
+/** Visitor context information, passed to visitor func */
 typedef struct {
   /** data page index */
   pix_t dpix;
@@ -525,11 +535,14 @@ typedef int (*spfs_visitor_t)(spfs_t *fs, uint32_t lu_entry, spfs_vis_info_t *in
 _SPFS_STATIC int spfs_page_visit(spfs_t *fs, pix_t start_dpix, pix_t end_dpix, void *varg, spfs_visitor_t v,
                uint16_t flags);
 
-// bit 76543210
-//     xxxyyyyy
-// where x : [1,3,5,7,9,11,13,15]
-//       y : 2^(y+6)
-// (2*x+1)*2^(y+6)
+/**
+ * packnum and unpacknum format
+ * bit 76543210
+ *     xxxyyyyy
+ * where x : [1,3,5,7,9,11,13,15]
+ *       y : 2^(y+6)
+ * (2*x+1)*2^(y+6)
+ */
 _SPFS_STATIC uint8_t spfs_packnum(uint32_t x);
 _SPFS_STATIC uint32_t spfs_unpacknum(uint8_t x);
 
