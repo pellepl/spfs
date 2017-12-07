@@ -418,7 +418,7 @@ int main(int argc, char *argv[]) {
       (SPFS_VERSION >> 12), (SPFS_VERSION >> 8) & 0xf, SPFS_VERSION & 0xff);
   if (argc < 2) {
     printf("Mounts a spfs image to a folder using fuse.\n");
-    printf("usage:\n%s <image file> (--read_only) <mount path> (fuse params)\n", argv[0]);
+    printf("usage:\n%s <image file> (--readonly) <mount path> (fuse params)\n", argv[0]);
     return 1;
   }
 
@@ -432,7 +432,7 @@ int main(int argc, char *argv[]) {
   memset(st, 0, sizeof(st_t));
   st->fs = &st->_fs;
 
-  if (strcmp("--read-only", argv[2])==0) {
+  if (strcmp("--readonly", argv[2])==0) {
     ro = 1;
     nxt_arg = 2;
   }

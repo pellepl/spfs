@@ -1,5 +1,6 @@
 0.4.0
 Lowlevel, GC when needed
+Cache
 Rename func
 Rename func, in fuse
 Reserve correct number of pages before altering index pages 
@@ -9,5 +10,13 @@ Extra header info, number of blocks
 Config option, no blind writes
 
 Finish tormentor
+
+Write tests
+
+Add all tests from spiffs 0.3.*
+
+Verify against spiffs 0.3.*
+
+Figure out a target transformer 0.3.* -> 0.4.0
 
 TECHSPEC

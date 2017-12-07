@@ -124,8 +124,8 @@ _SPFS_STATIC int _fd_claim(spfs_t *fs, spfs_fd_t **fd);
 _SPFS_STATIC int _fd_resolve(spfs_t *fs, spfs_file_t fh, spfs_fd_t **fd);
 _SPFS_STATIC void _fd_release(spfs_t *fs, spfs_fd_t *fd);
 _SPFS_STATIC int spfs_file_create(spfs_t *fs, spfs_fd_t *fd, const char *name);
-_SPFS_STATIC int spfs_file_create_rot(spfs_t *fs, spfs_fd_t *fd, const char *name, uint32_t rot_size);
 _SPFS_STATIC int spfs_file_create_fix(spfs_t *fs, spfs_fd_t *fd, const char *name, uint32_t fixed_size);
+/*_SPFS_STATIC int spfs_file_create_rot(spfs_t *fs, spfs_fd_t *fd, const char *name, uint32_t rot_size);*/
 _SPFS_STATIC int spfs_file_read(spfs_t *fs, spfs_fd_t *fd, uint32_t offs, uint32_t len, uint8_t *dst);
 _SPFS_STATIC int spfs_file_write(spfs_t *fs, spfs_fd_t *fd, uint32_t offs, uint32_t len,
                                  const uint8_t *src);

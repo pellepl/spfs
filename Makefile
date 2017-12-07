@@ -28,10 +28,10 @@ FLAGS ?=
 
 GCOV_ANNOTATION := //@REQUIRED_GCOV:
 
-MONOLITH ?=
-GCOV ?=
+GCOV ?= y
+ADDR-SANI ?= y
 V ?= @
-ADDR-SANI ?=
+MONOLITH ?=
 DBG ?=
 
 HAVE_FUSE = $(shell pkg-config fuse && echo yes)

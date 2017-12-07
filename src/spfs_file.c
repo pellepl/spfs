@@ -113,21 +113,38 @@ static void _inform(spfs_t *fs, spfs_file_event_t event, id_t id, spfs_file_even
   }
 }
 
+// calculate number of needed meta pages when writing to a file with given
+// current size, from given offset and length
 static uint32_t _calc_write_meta_pages(spfs_t *fs, uint32_t cursz, uint32_t offset, uint32_t len) {
-  const uint32_t sz_ix_0 = SPFS_IX_ENT_CNT(fs, 0) * SPFS_DPAGE_SZ(fs);
-  const uint32_t sz_ix_n = SPFS_IX_ENT_CNT(fs, 1) * SPFS_DPAGE_SZ(fs);
+  const uint32_t dpagesz = SPFS_DPAGE_SZ(fs);
+  // data size referenced by page index header
+  const uint32_t sz_ix_0 = SPFS_IX_ENT_CNT(fs, 0) * dpagesz;
+  // data size referenced by page index
+  const uint32_t sz_ix_n = SPFS_IX_ENT_CNT(fs, 1) * dpagesz;
+  // does the index header need to be updated wrt size?
   const uint8_t update_ixhdr_size = (cursz != SPFS_FILESZ_UNDEF) && (offset + len > cursz);
+  // does the index header need to be updated wrt mapping?
   const uint8_t update_ixhdr_map = (offset < sz_ix_0);
+  // if index header is update wrt mapping, we can shave off that size directly
   if (update_ixhdr_map) {
-    len -= sz_ix_0 - offset;
+    if (sz_ix_0 - offset < len) {
+      len -= sz_ix_0 - offset;
+    } else {
+      len = 0;
+    }
     offset = sz_ix_0;
   }
+  // do we append to an existing page only - no rewrites, no new pages?
+  const uint8_t append_one_page_only =
+      (offset == cursz && offset / dpagesz == (offset + len) / dpagesz);
   return ((update_ixhdr_map || update_ixhdr_size) ? 1 : 0) +
-      spfs_ceil(len, sz_ix_n);
+      (append_one_page_only ? 0 : spfs_ceil(len, sz_ix_n));
 }
 
+// calculate number of needed pages when truncating a file with given
+// current size to given new size
 static uint32_t _calc_trunc_pages(spfs_t *fs, uint32_t cursz, uint32_t offset) {
-  if (offset == cursz) return 0;
+  if (offset >= cursz) return 0;
   const uint32_t sz_ix_0 = SPFS_IX_ENT_CNT(fs, 0) * SPFS_DPAGE_SZ(fs);
   const uint8_t data_splice_needed = offset % SPFS_DPAGE_SZ(fs);
   const uint8_t offset_in_ixhdr = offset <= sz_ix_0;
