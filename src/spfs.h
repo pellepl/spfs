@@ -20,7 +20,7 @@
  * + Reading is random access.
  * + Calling one HAL read operation for many bytes is less costly than calling
  *   many HAL read operations for fewer bytes. I.e. it is assumed that the
- *   setup time is larger than the transfer time.
+ *   setup time is significant.
  * + RAM is small and expensive.
  * + No heap, must only use static allocated RAM and/or stack.
  */
@@ -111,46 +111,46 @@
 #define _SPFS_TEST_ARG(_arg)
 #endif
 
-#define _SPFS_HAL_WR_FL_OVERWRITE   (1<<0)
-#define _SPFS_HAL_WR_FL_IGNORE_BITS (1<<1)
+#define _SPFS_HAL_WR_FL_OVERWRITE       (1<<0)
+#define _SPFS_HAL_WR_FL_IGNORE_BITS     (1<<1)
 
 
 
 /* Any write to the filehandle is appended to end of the file */
-#define SPFS_APPEND                   (1<<0)
-#define SPFS_O_APPEND                 SPFS_APPEND
+#define SPFS_APPEND                     (1<<0)
+#define SPFS_O_APPEND                   SPFS_APPEND
 /* If the opened file exists, it will be truncated to zero length before opened */
-#define SPFS_TRUNC                    (1<<1)
-#define SPFS_O_TRUNC                  SPFS_TRUNC
+#define SPFS_TRUNC                      (1<<1)
+#define SPFS_O_TRUNC                    SPFS_TRUNC
 /* If the opened file does not exist, it will be created before opened */
-#define SPFS_CREAT                    (1<<2)
-#define SPFS_O_CREAT                  SPFS_CREAT
+#define SPFS_CREAT                      (1<<2)
+#define SPFS_O_CREAT                    SPFS_CREAT
 /* The opened file may only be read */
-#define SPFS_RDONLY                   (1<<3)
-#define SPFS_O_RDONLY                 SPFS_RDONLY
+#define SPFS_RDONLY                     (1<<3)
+#define SPFS_O_RDONLY                   SPFS_RDONLY
 /* The opened file may only be written */
-#define SPFS_WRONLY                   (1<<4)
-#define SPFS_O_WRONLY                 SPFS_WRONLY
+#define SPFS_WRONLY                     (1<<4)
+#define SPFS_O_WRONLY                   SPFS_WRONLY
 /* The opened file may be both read and written */
-#define SPFS_RDWR                     (SPFS_RDONLY | SPFS_WRONLY)
-#define SPFS_O_RDWR                   SPFS_RDWR
+#define SPFS_RDWR                       (SPFS_RDONLY | SPFS_WRONLY)
+#define SPFS_O_RDWR                     SPFS_RDWR
 /* Any writes to the filehandle will never be cached but flushed directly */
-#define SPFS_DIRECT                   (1<<5)
-#define SPFS_O_DIRECT                 SPFS_DIRECT
+#define SPFS_DIRECT                     (1<<5)
+#define SPFS_O_DIRECT                   SPFS_DIRECT
 /* If SPFS_O_CREAT and SPFS_O_EXCL are set, SPFS_open() shall fail if the file exists */
-#define SPFS_EXCL                     (1<<6)
-#define SPFS_O_EXCL                   SPFS_EXCL
+#define SPFS_EXCL                       (1<<6)
+#define SPFS_O_EXCL                     SPFS_EXCL
 /**
  * Data written with O_REWR will not allocate any new pages for the data.
  * Instead, it will simply rewrite existing data with given data. Considering
  * NOR flash, it means this flag can be used to clear bits in already written
  * files without allocating any new space. It will be as a logical AND
  * operation of given data and persisted data.
- * When writing with O_REWRITE, the file cannot grow. Writes must be within
+ * When writing with O_REWR, the file cannot grow. Writes must be within
  * existing file boundaries.
  * O_APPEND and O_REWR is invalid.
  */
-#define SPFS_O_REWR                   (1<<7)
+#define SPFS_O_REWR                     (1<<7)
 /**
  * Data written with O_SENS will be overwritten with zeroes when deleted.
  * Technically, any page having any sensitive bytes in it will be overwritten
@@ -160,28 +160,34 @@
  * This is more to avoid providing statistics on encrypted data to a
  * malicious attacker.
  */
-#define SPFS_O_SENS                 (1<<8)
+#define SPFS_O_SENS                     (1<<8)
 
+#define SPFS_SEEK_SET                   (0)
+#define SPFS_SEEK_CUR                   (1)
+#define SPFS_SEEK_END                   (2)
 
-#define SPFS_SEEK_SET               (0)
-#define SPFS_SEEK_CUR               (1)
-#define SPFS_SEEK_END               (2)
+/* maximum number of reserved pages */
+#define _SPFS_PFREE_RESV                 (3)
 
-
-#define SPFS_PFREE_RESV             (3)
-
-
-typedef SPFS_TYPEDEF_ID id_t;
-typedef SPFS_TYPEDEF_PAGE pix_t;
-typedef SPFS_TYPEDEF_SPAN spix_t;
-typedef SPFS_TYPEDEF_BLOCK bix_t;
+/* file id type */
+typedef SPFS_TYPEDEF_ID     id_t;
+/* page index type */
+typedef SPFS_TYPEDEF_PAGE   pix_t;
+/* page span index type */
+typedef SPFS_TYPEDEF_SPAN   spix_t;
+/* block index type */
+typedef SPFS_TYPEDEF_BLOCK  bix_t;
 
 struct spfs_s;
 
 typedef enum {
+  /** work buffer memory */
   SPFS_MEM_WORK_BUF = 0,
+  /** file descriptor memory */
   SPFS_MEM_FILEDESCS,
+  /** block index lookup table memory */
   SPFS_MEM_BLOCK_LU,
+  /** cache memory */
   SPFS_MEM_CACHE,
   _SPFS_MEM_TYPES
 } spfs_mem_type_t;
@@ -336,7 +342,7 @@ typedef struct {
   // reserved free pages
   struct {
     uint8_t ptaken;
-    pix_t arr[SPFS_PFREE_RESV];
+    pix_t arr[_SPFS_PFREE_RESV];
   } resv;
 
   bitmanio_bytearray_t lu;

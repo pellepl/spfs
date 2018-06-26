@@ -689,7 +689,7 @@ static int _page_find_free_v(spfs_t *fs, uint32_t lu_entry, spfs_vis_info_t *inf
   id_t id = spfs_signext(lu_entry >> SPFS_LU_FLAG_BITS, SPFS_BITS_ID(fs));
   if (id == SPFS_IDFREE) {
     uint32_t rix;
-    for (rix = 0; rix < SPFS_PFREE_RESV; rix++) {
+    for (rix = 0; rix < _SPFS_PFREE_RESV; rix++) {
       if (fs->run.resv.arr[rix] == info->dpix) return SPFS_VIS_CONT;
     }
     _page_find_free_varg_t *arg = (_page_find_free_varg_t *)varg;
@@ -777,12 +777,12 @@ _SPFS_STATIC int _resv_alloc(spfs_t *fs) {
   if (fs->run.pdele + fs->run.pfree - fs->run.resv.ptaken == 0)
     ERR(-SPFS_ERR_OUT_OF_PAGES);
   uint8_t rix;
-  for (rix = 0; rix < SPFS_PFREE_RESV; rix++) {
+  for (rix = 0; rix < _SPFS_PFREE_RESV; rix++) {
     if (fs->run.resv.arr[rix] == (pix_t)-1) {
       break;
     }
   }
-  spfs_assert(rix != SPFS_PFREE_RESV);
+  spfs_assert(rix != _SPFS_PFREE_RESV);
 
   if (fs->run.pfree == 0) {
     // TODO GC
@@ -800,7 +800,7 @@ _SPFS_STATIC int _resv_alloc(spfs_t *fs) {
 // unreserves a free page given handle, returns the data page index or error
 // the page is now found by find_free
 _SPFS_STATIC int _resv_free(spfs_t *fs, uint8_t rix) {
-  spfs_assert(rix < SPFS_PFREE_RESV);
+  spfs_assert(rix < _SPFS_PFREE_RESV);
   int dpix = -SPFS_ERR_FREE_PAGE_NOT_RESERVED;
   if (fs->run.resv.arr[rix] != (pix_t)-1) {
     dpix = (int)fs->run.resv.arr[rix];

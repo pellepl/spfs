@@ -259,7 +259,7 @@ void spfs_dump(spfs_t *fs, uint32_t dump_flags) {
     {
       SPFS_DUMP_PRINTF("resv.vec     :[ ");
       uint32_t i;
-      for (i = 0; i < SPFS_PFREE_RESV; i++) SPFS_DUMP_PRINTF(_SPIPRIpg" ", fs->run.resv.arr[i]);
+      for (i = 0; i < _SPFS_PFREE_RESV; i++) SPFS_DUMP_PRINTF(_SPIPRIpg" ", fs->run.resv.arr[i]);
       SPFS_DUMP_PRINTF("]\n");
     }
   }

@@ -68,56 +68,56 @@
 
 // enable or disable assert errors
 #ifndef SPFS_ASSERT
-#define SPFS_ASSERT             0
+#define SPFS_ASSERT                 0
 #endif
 // enable or disable error output
 #ifndef SPFS_DBG_ERROR
-#define SPFS_DBG_ERROR          0
+#define SPFS_DBG_ERROR              0
 #endif
 // enable or disable internal debug output
 #ifndef SPFS_DBG_LOWLEVEL
-#define SPFS_DBG_LOWLEVEL       0
+#define SPFS_DBG_LOWLEVEL           0
 #endif
 // enable or disable cache debug output
 #ifndef SPFS_DBG_CACHE
-#define SPFS_DBG_CACHE          0
+#define SPFS_DBG_CACHE              0
 #endif
 // enable or disable file debug output
 #ifndef SPFS_DBG_FILE
-#define SPFS_DBG_FILE           0
+#define SPFS_DBG_FILE               0
 #endif
 // enable or disable journal debug output
 #ifndef SPFS_DBG_JOURNAL
-#define SPFS_DBG_JOURNAL        0
+#define SPFS_DBG_JOURNAL            0
 #endif
 // enable or disable file system debug output
 #ifndef SPFS_DBG_FS
-#define SPFS_DBG_FS             0
+#define SPFS_DBG_FS                 0
 #endif
 // enable or disable garbage collection debug output
 #ifndef SPFS_DBG_GC
-#define SPFS_DBG_GC             0
+#define SPFS_DBG_GC                 0
 #endif
 // enable or disable api implementation debug output
 #ifndef SPFS_DBG_HIGHLEVEL
-#define SPFS_DBG_HIGHLEVEL      0
+#define SPFS_DBG_HIGHLEVEL          0
 #endif
 // enable or disable debug on lowlevel medium write
 #ifndef SPFS_DBG_LL_MEDIUM_WR
-#define SPFS_DBG_LL_MEDIUM_WR   0
+#define SPFS_DBG_LL_MEDIUM_WR       0
 #endif
 // enable or disable debug on lowlevel medium read
 #ifndef SPFS_DBG_LL_MEDIUM_RD
-#define SPFS_DBG_LL_MEDIUM_RD   0
+#define SPFS_DBG_LL_MEDIUM_RD       0
 #endif
 // enable or disable debug on lowlevel medium erase
 #ifndef SPFS_DBG_LL_MEDIUM_ER
-#define SPFS_DBG_LL_MEDIUM_ER   0
+#define SPFS_DBG_LL_MEDIUM_ER       0
 #endif
 
 
 #ifndef SPFS_DBG_USE_ANSI_COLORS
-#define SPFS_DBG_USE_ANSI_COLORS  0
+#define SPFS_DBG_USE_ANSI_COLORS    0
 #endif
 
 // some general signed number
@@ -293,7 +293,9 @@
 #endif
 
 #if SPFS_ASSERT
+#ifndef spfs_assert
 #define spfs_assert(x) if (!(x)) ERRET(-SPFS_ERR_ASSERT)
+#endif
 #else
 #define spfs_assert(x)
 #endif
